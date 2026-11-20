@@ -31,6 +31,7 @@ export interface Poll {
   id: number
   title: string
   intro: string | null
+  about: 'school' | 'teachers'
   status: PollStatus
   audience: string[] | null
   closes_at: string | null

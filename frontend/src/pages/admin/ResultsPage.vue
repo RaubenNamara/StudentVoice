@@ -97,6 +97,7 @@ function downloadCsv() {
         <RouterLink :to="{ name: 'poll', params: { id: data.poll.id } }" class="no-print text-sm text-gray-500 hover:text-ink">← Poll</RouterLink>
         <div class="mb-1 mt-2"><StatusChip :status="data.poll.status" :accepting="data.poll.accepting" /></div>
       </template>
+      <RouterLink v-if="data.poll.about === 'teachers'" :to="{ name: 'teacher-results', params: { id: data.poll.id } }" class="btn-primary no-print">By teacher</RouterLink>
       <button class="btn-secondary no-print" :disabled="!data.ballots || data.hidden" @click="downloadCsv"><ArrowDownTrayIcon class="h-4 w-4" /> Spreadsheet</button>
       <button class="btn-secondary no-print" @click="print"><PrinterIcon class="h-4 w-4" /> Print</button>
     </PageHeader>
@@ -106,7 +107,7 @@ function downloadCsv() {
       <div class="flex flex-wrap items-baseline justify-between gap-2">
         <h2 class="font-semibold">Turnout</h2>
         <p class="text-sm text-gray-600">
-          <strong class="text-lg tabular-nums text-ink">{{ data.turnout.voted.toLocaleString() }}</strong> of {{ data.turnout.eligible.toLocaleString() }} students voted
+          <strong class="text-lg tabular-nums text-ink">{{ data.turnout.voted.toLocaleString() }}</strong> of {{ data.turnout.eligible.toLocaleString() }} students {{ data.poll.about === 'teachers' ? 'took part' : 'voted' }}
           · {{ percent(data.turnout.voted, data.turnout.eligible) }}%
         </p>
       </div>

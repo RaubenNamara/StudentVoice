@@ -8,12 +8,21 @@ import { confirm, toast } from '@/feedback'
 import { useSession } from '@/stores/session'
 import { SCALE, type Question } from '@/types'
 
+interface Target {
+  teacher_id: number
+  teacher: string
+  subject_id: number
+  subject: string
+  status: 'todo' | 'done' | 'skipped'
+}
 interface VotePoll {
   id: number
   title: string
   intro: string | null
+  about: 'school' | 'teachers'
   closes_at: string | null
   questions: (Question & { id: number })[]
+  teachers?: Target[]
 }
 
 const route = useRoute()
@@ -27,11 +36,58 @@ const busy = ref(false)
 const done = ref(false)
 const moreWaiting = ref(0)
 const session = useSession()
+/** Teacher polls: the teacher being rated now (null = the list of teachers) */
+const current = ref<Target | null>(null)
+const isTeachers = computed(() => poll.value?.about === 'teachers')
+const left = computed(() => poll.value?.teachers?.filter((t) => t.status === 'todo') ?? [])
+const showForm = computed(() => !!poll.value && (!isTeachers.value || !!current.value))
+
+function resetAnswers() {
+  for (const q of poll.value?.questions ?? []) answers[q.id] = q.type === 'multi' ? [] : q.type === 'text' ? '' : null
+  errors.value = {}
+}
+function rate(t: Target) {
+  resetAnswers()
+  current.value = t
+  window.scrollTo({ top: 0 })
+}
+function backToList() {
+  current.value = null
+  window.scrollTo({ top: 0 })
+}
+
+async function notMine(t: Target) {
+  if (!(await confirm(`${t.teacher} is not your ${t.subject} teacher?`, 'They will be taken off your list for this poll. Nothing about them is saved from you.', 'Not my teacher'))) return
+  try {
+    await api.post(`/vote/polls/${poll.value!.id}/skip`, { teacher_id: t.teacher_id, subject_id: t.subject_id })
+    t.status = 'skipped'
+    if (current.value === t) current.value = null
+    await afterTeacher()
+  } catch (e) {
+    toast(e instanceof ApiError ? e.message : 'Could not save. Try again.', 'error')
+  }
+}
+
+/** A teacher answered or skipped: back to the list, or finished when none are left */
+async function afterTeacher() {
+  current.value = null
+  window.scrollTo({ top: 0 })
+  if (!left.value.length) await finish()
+}
+
+async function finish() {
+  done.value = true
+  window.scrollTo({ top: 0 })
+  // Shared computers (labs, the library): nothing else to answer, so sign out for the next student
+  const polls = await api.get<{ accepting: boolean; voted: boolean }[]>('/vote/polls').catch(() => [])
+  moreWaiting.value = polls.filter((p) => p.accepting && !p.voted).length
+  if (!moreWaiting.value) await session.studentLogout()
+}
 
 onMounted(async () => {
   try {
     poll.value = await api.get<VotePoll>(`/vote/polls/${route.params.id}`)
-    for (const q of poll.value.questions) answers[q.id] = q.type === 'multi' ? [] : q.type === 'text' ? '' : null
+    resetAnswers()
   } catch (e) {
     loadError.value = e instanceof ApiError ? e.message : 'Could not open this poll.'
   } finally {
@@ -81,17 +137,28 @@ async function submit() {
     goTo(missing.value[0].id)
     return
   }
-  if (!(await confirm('Send your answers?', 'You can only vote once in this poll, so you will not be able to change them afterwards.', 'Send my answers'))) return
+  const t = current.value
+  const ask = t
+    ? ['Send your answers?', `You rate ${t.teacher} once in this poll, so you can't change these afterwards.`]
+    : ['Send your answers?', 'You can only vote once in this poll, so you will not be able to change them afterwards.']
+  if (!(await confirm(ask[0], ask[1], 'Send my answers'))) return
   busy.value = true
   try {
-    await api.post(`/vote/polls/${poll.value.id}`, { answers })
-    done.value = true
-    window.scrollTo({ top: 0 })
-    // Shared computers (labs, the library): nothing else to answer, so sign out for the next student
-    const left = await api.get<{ accepting: boolean; voted: boolean }[]>('/vote/polls').catch(() => [])
-    moreWaiting.value = left.filter((p) => p.accepting && !p.voted).length
-    if (!moreWaiting.value) await session.studentLogout()
+    await api.post(`/vote/polls/${poll.value.id}`, t ? { answers, teacher_id: t.teacher_id, subject_id: t.subject_id } : { answers })
+    if (t) {
+      t.status = 'done'
+      toast(`Thank you - ${t.subject} done.`)
+      await afterTeacher()
+    } else {
+      await finish()
+    }
   } catch (e) {
+    if (e instanceof ApiError && e.code === 'already_voted' && t) {
+      t.status = 'done'
+      toast(e.message, 'error')
+      await afterTeacher()
+      return
+    }
     if (e instanceof ApiError && e.code === 'already_voted') {
       toast(e.message, 'error')
       router.replace({ name: 'vote-polls' })
@@ -111,7 +178,7 @@ async function submit() {
 
 <template>
   <StudentShell>
-    <template v-if="poll && !done" #bar>
+    <template v-if="showForm && !done" #bar>
       <div class="h-1 bg-gray-100">
         <div class="h-1 bg-gold-400 transition-all duration-300" :style="{ width: `${total ? (count / total) * 100 : 0}%` }" />
       </div>
@@ -141,9 +208,45 @@ async function submit() {
       </template>
     </div>
 
-    <template v-else-if="poll">
+    <!-- Teacher poll: the student's teachers -->
+    <template v-else-if="poll && isTeachers && !current">
       <h1 class="text-2xl font-semibold tracking-tight sm:text-3xl">{{ poll.title }}</h1>
       <p v-if="poll.intro" class="mt-2 whitespace-pre-line text-gray-600">{{ poll.intro }}</p>
+      <div class="mt-5 flex items-center gap-3">
+        <div class="h-2 flex-1 overflow-hidden rounded-full bg-gray-100">
+          <div class="h-2 rounded-full bg-gold-400 transition-all" :style="{ width: `${((poll.teachers!.length - left.length) / poll.teachers!.length) * 100}%` }" />
+        </div>
+        <span class="shrink-0 text-sm text-gray-600">{{ poll.teachers!.length - left.length }} of {{ poll.teachers!.length }} done</span>
+      </div>
+      <ul class="mt-6 space-y-3">
+        <li v-for="t in poll.teachers" :key="`${t.teacher_id}-${t.subject_id}`" class="card flex flex-wrap items-center gap-3 p-4" :class="t.status !== 'todo' ? 'opacity-70' : ''">
+          <div class="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-indigo-50 text-xs font-semibold text-indigo-800 dark:bg-indigo-950 dark:text-indigo-200">{{ t.subject.slice(0, 4) }}</div>
+          <div class="min-w-0 flex-1">
+            <div class="font-semibold">{{ t.teacher }}</div>
+            <div class="text-sm text-gray-500">{{ t.subject }}</div>
+          </div>
+          <span v-if="t.status === 'done'" class="chip bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300"><CheckIcon class="h-3.5 w-3.5" /> Done</span>
+          <span v-else-if="t.status === 'skipped'" class="chip bg-gray-100 text-gray-600">Not my teacher</span>
+          <template v-else>
+            <button class="btn-ghost px-2 text-xs" @click="notMine(t)">Not my teacher</button>
+            <button class="btn-primary" @click="rate(t)">Rate</button>
+          </template>
+        </li>
+      </ul>
+      <p class="mt-6 text-center text-xs text-gray-500">Your answers never show your name. Teachers never see who said what.</p>
+    </template>
+
+    <template v-else-if="poll">
+      <template v-if="current">
+        <button class="btn-ghost -ml-3 mb-2 px-3 text-sm" @click="backToList">← All my teachers</button>
+        <p class="eyebrow text-gold-600">{{ current.subject }}</p>
+        <h1 class="mt-1 text-2xl font-semibold tracking-tight sm:text-3xl">{{ current.teacher }}</h1>
+        <p class="mt-2 text-gray-600">Answer thinking only about {{ current.teacher }}'s {{ current.subject }} lessons.</p>
+      </template>
+      <template v-else>
+        <h1 class="text-2xl font-semibold tracking-tight sm:text-3xl">{{ poll.title }}</h1>
+        <p v-if="poll.intro" class="mt-2 whitespace-pre-line text-gray-600">{{ poll.intro }}</p>
+      </template>
       <p class="mt-3 text-sm text-gray-500">{{ total }} questions · questions marked <span class="text-red-600">*</span> need an answer</p>
 
       <form class="mt-8 space-y-10" @submit.prevent="submit">

@@ -15,7 +15,7 @@ const route = useRoute()
 const router = useRouter()
 const polls = ref<PollListItem[] | null>(null)
 const creating = ref(route.query.new === '1')
-const form = ref({ title: '', intro: '', audience: [] as string[] })
+const form = ref({ title: '', intro: '', about: 'school' as 'school' | 'teachers', audience: [] as string[] })
 const error = ref('')
 const busy = ref(false)
 
@@ -34,6 +34,10 @@ async function create() {
   }
 }
 
+const ABOUT = [
+  { v: 'school' as const, t: 'The school', d: 'Each student answers once.' },
+  { v: 'teachers' as const, t: 'Each teacher', d: 'Each student answers once for each of their teachers.' },
+]
 const audienceText = (a: string[] | null) => (a ? a.join(', ') : 'Every class')
 </script>
 
@@ -58,6 +62,7 @@ const audienceText = (a: string[] | null) => (a ? a.join(', ') : 'Every class')
         <div class="flex flex-wrap items-center gap-2">
           <h2 class="font-semibold hover:text-indigo-700">{{ p.title }}</h2>
           <StatusChip :status="p.status" :accepting="p.accepting" />
+          <span v-if="p.about === 'teachers'" class="chip bg-gold-100 text-gold-700">Each teacher</span>
         </div>
         <p class="mt-1 text-sm text-gray-500">
           {{ p.questions }} questions · {{ audienceText(p.audience) }}
@@ -71,7 +76,7 @@ const audienceText = (a: string[] | null) => (a ? a.join(', ') : 'Every class')
         </div>
         <Meter :value="p.votes" :max="p.eligible" :tone="p.status === 'open' ? 'gold' : 'indigo'" />
       </div>
-      <RouterLink v-if="p.votes" :to="{ name: 'results', params: { id: p.id } }" class="btn-secondary shrink-0"><ChartBarIcon class="h-4 w-4" /> Results</RouterLink>
+      <RouterLink v-if="p.votes" :to="{ name: p.about === 'teachers' ? 'teacher-results' : 'results', params: { id: p.id } }" class="btn-secondary shrink-0"><ChartBarIcon class="h-4 w-4" /> Results</RouterLink>
     </div>
   </div>
 
@@ -84,6 +89,14 @@ const audienceText = (a: string[] | null) => (a ? a.join(', ') : 'Every class')
       <div>
         <label class="label" for="i">Note to students <span class="font-normal text-gray-500">(optional)</span></label>
         <textarea id="i" v-model="form.intro" class="input min-h-[5rem]" placeholder="What the poll is about and why their answers matter." />
+      </div>
+      <div>
+        <span class="label">This poll is about</span>
+        <div class="grid grid-cols-2 gap-2">
+          <button v-for="o in ABOUT" :key="o.v" type="button" class="rounded-xl border p-3 text-left text-sm" :class="form.about === o.v ? 'border-indigo-700 bg-indigo-50 dark:bg-indigo-950/60' : 'border-line hover:border-indigo-300'" @click="form.about = o.v">
+            <span class="font-semibold">{{ o.t }}</span><span class="mt-0.5 block text-xs text-gray-500">{{ o.d }}</span>
+          </button>
+        </div>
       </div>
       <div>
         <span class="label">Who votes</span>

@@ -36,7 +36,8 @@ legacy/                 the first plain-PHP version (not served; kept for refere
 3. Create the database and tables: `php backend/bin/migrate.php`
 4. Make your super admin: `php backend/bin/create-admin.php --name="Your Name" --email=you@example.com`
    It prints a temporary password; sign in at http://localhost/studentvoice/admin and choose your own.
-5. Bring in the students: Students → **Sync from SMIS** (or `php backend/bin/sync-students.php`).
+5. Bring in the students: Students → **Sync from SMIS** (or `php backend/bin/sync-students.php`),
+   then the teachers: Teachers → **Sync from Tusome** (see "Linking Tusome" below).
 6. Frontend: `cd frontend`, `npm install`, then either
    - `npm run dev` → http://localhost:5175 (Vite forwards `/api` to XAMPP), or
    - `npm run build:local` → the built app at http://localhost/studentvoice
@@ -59,7 +60,8 @@ and opens it. Answer types: agree/disagree 1–5, pick one, pick any, yes/no, wr
 can have section headings and can be pasted in many at a time. Once anyone has voted, questions can
 only be reworded (so every ballot answered the same questions); **Make a copy** to change more, or
 to run the same poll next term. A poll with votes can be closed but never deleted. The paper
-"Students' Voice 360° Teaching & Learning" form is loaded as a ready-made draft poll.
+"Students' Voice 360° Teaching & Learning" form is loaded twice as ready-made drafts: a school-wide
+version and a **Teacher feedback** version answered for each teacher.
 
 **Once, and anonymous.** Voting writes two unrelated things in one transaction:
 - `voters` (poll + student): who has voted. Its primary key is what makes a second vote impossible,
@@ -71,6 +73,34 @@ to run the same poll next term. A poll with votes can be closed but never delete
 Results never show a class or stream with fewer than 5 ballots, and written answers are shown in
 random order. When a student has nothing left to answer, they are signed out at once so the next
 student can use the same computer; any student session also ends after 15 minutes without activity.
+
+**Teacher polls (grouped by teacher).** A poll can be about *the school* (each student answers
+once) or about *each teacher* (each student answers once for each of their own teachers).
+Who teaches whom comes from **Tusome** (Teachers → **Sync from Tusome**): its teachers, their
+subjects, and which subjects each student takes. The **Teaching list** (one grid per class: subjects ×
+streams) says who teaches each subject in each stream; a subject with only one teacher is filled in
+automatically, and admins fill the rest (a sync never changes their choices). A student rates, for
+each subject they take, their own teacher where Tusome records one, else the teacher listed for their
+stream. Subjects Tusome doesn't record for a stream (electives) can be added to the grid; then the
+whole stream rates that teacher. A student can tap **Not my teacher**; those counts show per teacher
+so the list can be corrected.
+
+Teacher results (admins only; teachers have no account and never see them):
+- **Ranking table**: each teacher and subject with ratings / students listed, an overall score,
+  a score per section, change since the previous teacher poll and "not my teacher" counts; sort any
+  column, switch to **By subject** (with subject averages), spreadsheet and print.
+- **Teacher report** (one page, printable): overall and per-area scores against the school average,
+  strongest and weakest statements, every statement, scores by class and stream, a trend across
+  teacher polls, and the written comments.
+- Teachers with fewer than 5 ratings show counts only, never scores.
+
+"Once per teacher" is enforced with a fingerprint (HMAC of poll + student + teacher + subject with
+`APP_KEY`) instead of the student's id, so the database shows how many students rated a teacher but
+not which ones. **Never change or lose `APP_KEY`** while a teacher poll is open.
+
+Linking Tusome: put the same random key (32+ characters) in Tusome's `backend/.env` as
+`STUDENT_VOICE_API_KEY` and here as `TUSOME_API_KEY`, and set `TUSOME_TEACHING_API_URL` to Tusome's
+`/api/integrations/student-voice/teaching` address. With no key set, Tusome's feed stays switched off.
 
 **Admins.** Super admins manage the admin list (Admins page). New admins and password resets get a
 temporary password shown once, which must be replaced at first sign-in.

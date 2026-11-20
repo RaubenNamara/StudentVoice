@@ -19,7 +19,8 @@ const route = useRoute()
 const router = useRouter()
 const id = computed(() => Number(route.params.id))
 const poll = ref<PollDetail | null>(null)
-const details = ref({ title: '', intro: '', audience: [] as string[], closes_at: '' })
+const details = ref({ title: '', intro: '', about: 'school' as 'school' | 'teachers', audience: [] as string[], closes_at: '' })
+const gaps = ref<number | null>(null)
 const questions = ref<EditQuestion[]>([])
 const saved = ref('')
 const busy = ref(false)
@@ -39,7 +40,8 @@ function strip() {
 async function load() {
   const p = await api.get<PollDetail>(`/admin/polls/${id.value}`)
   poll.value = p
-  details.value = { title: p.title, intro: p.intro ?? '', audience: p.audience ?? [], closes_at: p.closes_at ? p.closes_at.slice(0, 16).replace(' ', 'T') : '' }
+  details.value = { title: p.title, intro: p.intro ?? '', about: p.about, audience: p.audience ?? [], closes_at: p.closes_at ? p.closes_at.slice(0, 16).replace(' ', 'T') : '' }
+  gaps.value = p.about === 'teachers' ? (await api.get<{ gaps: number }>('/admin/teachers')).gaps : null
   questions.value = p.questions.map((q) => ({ ...q, options: [...q.options], _k: key++ }))
   saved.value = JSON.stringify(strip())
 }
@@ -182,10 +184,16 @@ async function remove() {
         <RouterLink :to="{ name: 'polls' }" class="text-sm text-gray-500 hover:text-ink">← Polls</RouterLink>
         <div class="mb-1 mt-2"><StatusChip :status="poll.status" :accepting="poll.accepting" /></div>
       </template>
-      <RouterLink v-if="poll.votes" :to="{ name: 'results', params: { id: poll.id } }" class="btn-secondary"><ChartBarIcon class="h-4 w-4" /> Results</RouterLink>
+      <RouterLink v-if="poll.votes && poll.about === 'teachers'" :to="{ name: 'teacher-results', params: { id: poll.id } }" class="btn-secondary"><ChartBarIcon class="h-4 w-4" /> Teacher results</RouterLink>
+      <RouterLink v-else-if="poll.votes" :to="{ name: 'results', params: { id: poll.id } }" class="btn-secondary"><ChartBarIcon class="h-4 w-4" /> Results</RouterLink>
       <button v-if="poll.status !== 'open'" class="btn-primary" @click="setStatus('open')"><PlayIcon class="h-4 w-4" /> {{ poll.status === 'closed' ? 'Open again' : 'Open poll' }}</button>
       <button v-else class="btn-secondary" @click="setStatus('closed')"><StopIcon class="h-4 w-4" /> Close poll</button>
     </PageHeader>
+
+    <div v-if="poll.about === 'teachers' && gaps" class="mb-6 flex flex-wrap items-center justify-between gap-3 rounded-xl bg-gold-50 p-4 text-sm text-gold-700">
+      <span>Each student rates the teachers on the Teaching list for them. {{ gaps }} subject{{ gaps === 1 ? '' : 's' }} across the school still {{ gaps === 1 ? 'has' : 'have' }} no teacher, so those students won't rate one.</span>
+      <RouterLink :to="{ name: 'teachers' }" class="btn-secondary">Open the Teaching list</RouterLink>
+    </div>
 
     <div v-if="poll.status !== 'draft'" class="mb-6 card flex flex-wrap items-center gap-x-6 gap-y-2 p-4 text-sm">
       <span><strong class="tabular-nums">{{ poll.votes.toLocaleString() }}</strong> of {{ poll.eligible.toLocaleString() }} students have voted ({{ percent(poll.votes, poll.eligible) }}%)</span>
@@ -204,6 +212,25 @@ async function remove() {
         <div>
           <label class="label" for="intro">Note to students</label>
           <textarea id="intro" v-model="details.intro" class="input min-h-[6rem]" />
+        </div>
+        <div>
+          <span class="label">This poll is about</span>
+          <div class="flex rounded-lg border border-line p-0.5 text-sm" role="radiogroup">
+            <button
+              v-for="o in [{ v: 'school', t: 'The school' }, { v: 'teachers', t: 'Each teacher' }] as const"
+              :key="o.v"
+              type="button"
+              role="radio"
+              :aria-checked="details.about === o.v"
+              :disabled="locked"
+              class="flex-1 rounded-md px-3 py-1.5 font-medium disabled:cursor-not-allowed"
+              :class="details.about === o.v ? 'bg-indigo-700 text-white' : 'text-gray-600'"
+              @click="details.about = o.v"
+            >
+              {{ o.t }}
+            </button>
+          </div>
+          <p class="mt-1.5 text-xs text-gray-500">{{ details.about === 'teachers' ? 'Each student answers once for each of their teachers (from the Teaching list).' : 'Each student answers once.' }}</p>
         </div>
         <div>
           <span class="label">Who votes</span>

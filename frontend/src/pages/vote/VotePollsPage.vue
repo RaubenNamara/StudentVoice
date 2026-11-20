@@ -14,6 +14,9 @@ interface MyPoll {
   accepting: boolean
   questions: number
   voted: boolean
+  about: 'school' | 'teachers'
+  teachers?: number
+  handled?: number
 }
 
 const session = useSession()
@@ -67,11 +70,12 @@ onMounted(async () => {
           <h2 class="text-lg font-semibold">{{ p.title }}</h2>
           <p v-if="p.intro" class="mt-1 line-clamp-2 text-sm text-gray-600">{{ p.intro }}</p>
           <p class="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-gray-500">
-            <span>{{ p.questions }} questions</span>
+            <span v-if="p.about === 'teachers'" class="font-medium text-gold-700">{{ p.handled }} of {{ p.teachers }} teachers done · {{ p.questions }} questions each</span>
+            <span v-else>{{ p.questions }} questions</span>
             <span v-if="p.closes_at" class="inline-flex items-center gap-1"><ClockIcon class="h-3.5 w-3.5" /> Closes {{ formatDate(p.closes_at) }}</span>
           </p>
         </div>
-        <span class="btn-primary shrink-0">Start <ChevronRightIcon class="h-4 w-4" /></span>
+        <span class="btn-primary shrink-0">{{ p.handled ? 'Continue' : 'Start' }} <ChevronRightIcon class="h-4 w-4" /></span>
       </RouterLink>
     </section>
 

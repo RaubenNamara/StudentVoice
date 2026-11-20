@@ -7,6 +7,8 @@ use StudentVoice\Controllers\AuthController;
 use StudentVoice\Controllers\PollController;
 use StudentVoice\Controllers\ResultController;
 use StudentVoice\Controllers\StudentController;
+use StudentVoice\Controllers\TeacherController;
+use StudentVoice\Controllers\TeacherResultController;
 use StudentVoice\Controllers\VoteController;
 use StudentVoice\Http\Router;
 
@@ -26,6 +28,7 @@ $router->post('/api/vote/logout', [AuthController::class, 'studentLogout'], $stu
 $router->get('/api/vote/polls', [VoteController::class, 'polls'], $student);
 $router->get('/api/vote/polls/{id}', [VoteController::class, 'poll'], $student);
 $router->post('/api/vote/polls/{id}', [VoteController::class, 'submit'], $student);
+$router->post('/api/vote/polls/{id}/skip', [VoteController::class, 'skip'], $student);
 
 // Admins
 $router->post('/api/admin/logout', [AuthController::class, 'adminLogout'], ['before_password' => true]);
@@ -51,6 +54,15 @@ $router->post('/api/admin/polls/{id}/questions', [PollController::class, 'saveQu
 $router->post('/api/admin/polls/{id}/status', [PollController::class, 'setStatus']);
 $router->post('/api/admin/polls/{id}/duplicate', [PollController::class, 'duplicate']);
 $router->get('/api/admin/polls/{id}/results', [ResultController::class, 'show']);
+$router->get('/api/admin/polls/{id}/teachers', [TeacherResultController::class, 'ranking']);
+$router->get('/api/admin/polls/{id}/teachers/{teacher}/{subject}', [TeacherResultController::class, 'report']);
+
+// Teachers (from Tusome) and the Teaching list
+$router->get('/api/admin/teachers', [TeacherController::class, 'index']);
+$router->post('/api/admin/teachers/sync', [TeacherController::class, 'sync']);
+$router->get('/api/admin/teaching', [TeacherController::class, 'grid']);
+$router->post('/api/admin/teaching', [TeacherController::class, 'setCell']);
+$router->post('/api/admin/teaching/fill-class', [TeacherController::class, 'fillClass']);
 
 // Super admins: the admin accounts
 $router->get('/api/admin/admins', [AdminController::class, 'index'], $super);

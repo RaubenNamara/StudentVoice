@@ -51,7 +51,7 @@ final class ResultController
                 $byQ[(int) $a['question_id']][] = $a;
             }
             foreach ($questions as $q) {
-                $results[] = $this->summarise($q, $byQ[$q['id']] ?? [], $ballots);
+                $results[] = self::summarise($q, $byQ[$q['id']] ?? [], $ballots);
             }
         }
 
@@ -66,7 +66,7 @@ final class ResultController
         ]);
     }
 
-    private function summarise(array $q, array $answers, int $ballots): array
+    public static function summarise(array $q, array $answers, int $ballots): array
     {
         $out = ['question' => $q, 'answered' => count($answers), 'skipped' => max(0, $ballots - count($answers))];
         switch ($q['type']) {
@@ -109,7 +109,7 @@ final class ResultController
         return $out;
     }
 
-    /** Voted / could vote, per class and stream (voters know the class; streams come from ballots) */
+    /** Students who took part / could vote, per class and stream (from voters: one row per student) */
     private function turnout(\PDO $db, array $poll): array
     {
         $eligible = [];
@@ -122,7 +122,7 @@ final class ResultController
                 $eligible[$c['class']]['streams'][$s['stream']] = ['stream' => $s['stream'], 'students' => $s['students'], 'voted' => 0];
             }
         }
-        $stmt = $db->prepare('SELECT class, stream, COUNT(*) AS n FROM ballots WHERE poll_id = ? GROUP BY class, stream');
+        $stmt = $db->prepare('SELECT class, stream, COUNT(*) AS n FROM voters WHERE poll_id = ? GROUP BY class, stream');
         $stmt->execute([$poll['id']]);
         foreach ($stmt->fetchAll() as $row) {
             $eligible[$row['class']] ??= ['class' => $row['class'], 'students' => 0, 'voted' => 0, 'streams' => []];

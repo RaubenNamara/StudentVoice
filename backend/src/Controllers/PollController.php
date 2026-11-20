@@ -45,9 +45,10 @@ final class PollController
     public function store(Request $r): never
     {
         [$title, $intro, $audience, $closesAt] = $this->details($r);
+        $about = $r->string('about') === 'teachers' ? 'teachers' : 'school';
         $db = Database::get();
-        $db->prepare('INSERT INTO polls (title, intro, audience, closes_at, created_by) VALUES (?, ?, ?, ?, ?)')
-            ->execute([$title, $intro, $audience, $closesAt, Auth::adminId()]);
+        $db->prepare('INSERT INTO polls (title, intro, about, audience, closes_at, created_by) VALUES (?, ?, ?, ?, ?, ?)')
+            ->execute([$title, $intro, $about, $audience, $closesAt, Auth::adminId()]);
         Response::ok(['id' => (int) $db->lastInsertId()], 201);
     }
 
@@ -55,8 +56,12 @@ final class PollController
     {
         $poll = $this->poll((int) $r->param('id'));
         [$title, $intro, $audience, $closesAt] = $this->details($r);
-        Database::get()->prepare('UPDATE polls SET title = ?, intro = ?, audience = ?, closes_at = ? WHERE id = ?')
-            ->execute([$title, $intro, $audience, $closesAt, $poll['id']]);
+        $about = $r->string('about') === 'teachers' ? 'teachers' : ($r->string('about') === 'school' ? 'school' : $poll['about']);
+        if ($about !== $poll['about'] && Polls::voteCount(Database::get(), $poll['id']) > 0) {
+            Response::error('Students have already voted, so the poll cannot switch between the school and teachers. Make a copy instead.', 422);
+        }
+        Database::get()->prepare('UPDATE polls SET title = ?, intro = ?, about = ?, audience = ?, closes_at = ? WHERE id = ?')
+            ->execute([$title, $intro, $about, $audience, $closesAt, $poll['id']]);
         Response::ok();
     }
 
@@ -191,8 +196,8 @@ final class PollController
     {
         $poll = $this->poll((int) $r->param('id'));
         $id = Database::transaction(function ($db) use ($poll) {
-            $db->prepare('INSERT INTO polls (title, intro, audience, created_by) VALUES (?, ?, ?, ?)')
-                ->execute([mb_substr($poll['title'] . ' (copy)', 0, 190), $poll['intro'], $poll['audience'] ? json_encode($poll['audience']) : null, Auth::adminId()]);
+            $db->prepare('INSERT INTO polls (title, intro, about, audience, created_by) VALUES (?, ?, ?, ?, ?)')
+                ->execute([mb_substr($poll['title'] . ' (copy)', 0, 190), $poll['intro'], $poll['about'], $poll['audience'] ? json_encode($poll['audience']) : null, Auth::adminId()]);
             $id = (int) $db->lastInsertId();
             $db->prepare('INSERT INTO questions (poll_id, position, section, prompt, type, options, required)
                           SELECT ?, position, section, prompt, type, options, required FROM questions WHERE poll_id = ? ORDER BY position, id')

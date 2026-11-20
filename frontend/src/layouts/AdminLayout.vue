@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { Bars3Icon, ChartBarSquareIcon, ChatBubbleLeftRightIcon, KeyIcon, ArrowRightOnRectangleIcon, ShieldCheckIcon, UserGroupIcon, XMarkIcon } from '@heroicons/vue/24/outline'
+import { AcademicCapIcon, Bars3Icon,ChartBarSquareIcon, ChatBubbleLeftRightIcon, KeyIcon, ArrowRightOnRectangleIcon, ShieldCheckIcon, UserGroupIcon, XMarkIcon } from '@heroicons/vue/24/outline'
 import BrandMark from '@/components/BrandMark.vue'
 import ThemeToggle from '@/components/ThemeToggle.vue'
 import { useSession } from '@/stores/session'
@@ -14,8 +14,9 @@ watch(() => route.fullPath, () => (open.value = false))
 
 const nav = computed(() => [
   { to: { name: 'overview' }, label: 'Overview', icon: ChartBarSquareIcon, match: ['overview'] },
-  { to: { name: 'polls' }, label: 'Polls', icon: ChatBubbleLeftRightIcon, match: ['polls', 'poll', 'results'] },
+  { to: { name: 'polls' }, label: 'Polls', icon: ChatBubbleLeftRightIcon, match: ['polls', 'poll', 'results', 'teacher-results', 'teacher-report'] },
   { to: { name: 'students' }, label: 'Students', icon: UserGroupIcon, match: ['students'] },
+  { to: { name: 'teachers' }, label: 'Teachers', icon: AcademicCapIcon, match: ['teachers'] },
   ...(session.isSuper ? [{ to: { name: 'admins' }, label: 'Admins', icon: ShieldCheckIcon, match: ['admins'] }] : []),
 ])
 const active = (match: string[]) => match.includes(String(route.name))

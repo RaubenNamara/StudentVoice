@@ -105,6 +105,43 @@ final class TeacherResultController
         ]);
     }
 
+    /**
+     * GET /admin/polls/{id}/teachers/leaders - for the best/lowest performers charts: each teacher's
+     * spread of answers (SD..SA counts) per agree/disagree statement. Only teachers with enough
+     * ratings overall; the page also skips a statement with fewer than MIN_GROUP answers.
+     */
+    public function leaders(Request $r): never
+    {
+        $db = Database::get();
+        $poll = $this->teacherPoll((int) $r->param('id'));
+        $questions = array_values(array_map(
+            fn ($q) => ['id' => $q['id'], 'prompt' => $q['prompt'], 'section' => $q['section']],
+            array_filter(Polls::questions($db, $poll['id']), fn ($q) => $q['type'] === 'scale')
+        ));
+        $ballots = $this->ballotCounts($db, $poll['id']);
+        $stmt = $db->prepare(
+            "SELECT b.teacher_id, b.subject_id, a.question_id, a.value_num, COUNT(*)
+             FROM answers a JOIN ballots b ON b.id = a.ballot_id JOIN questions q ON q.id = a.question_id AND q.type = 'scale'
+             WHERE b.poll_id = ? AND b.teacher_id IS NOT NULL GROUP BY b.teacher_id, b.subject_id, a.question_id, a.value_num"
+        );
+        $stmt->execute([$poll['id']]);
+        $counts = [];
+        foreach ($stmt->fetchAll(PDO::FETCH_NUM) as [$t, $s, $q, $v, $n]) {
+            if ($v >= 1 && $v <= 5 && ($ballots["$t|$s"] ?? 0) >= Polls::MIN_GROUP) {
+                $counts["$t|$s"][(int) $q] ??= [0, 0, 0, 0, 0];
+                $counts["$t|$s"][(int) $q][(int) $v - 1] = (int) $n;
+            }
+        }
+        $names = $db->query('SELECT id, name FROM teachers')->fetchAll(PDO::FETCH_KEY_PAIR);
+        $subjects = $db->query('SELECT id, name FROM subjects')->fetchAll(PDO::FETCH_KEY_PAIR);
+        $teachers = [];
+        foreach ($counts as $k => $byQ) {
+            [$t, $s] = array_map('intval', explode('|', $k));
+            $teachers[] = ['teacher_id' => $t, 'teacher' => $names[$t] ?? '', 'subject_id' => $s, 'subject' => $subjects[$s] ?? '', 'ratings' => $ballots[$k], 'counts' => $byQ];
+        }
+        Response::ok(['questions' => $questions, 'teachers' => $teachers, 'min_group' => Polls::MIN_GROUP]);
+    }
+
     /** GET /admin/polls/{id}/teachers/{teacher}/{subject} - one teacher's report */
     public function report(Request $r): never
     {

@@ -55,6 +55,7 @@ $router->post('/api/admin/polls/{id}/status', [PollController::class, 'setStatus
 $router->post('/api/admin/polls/{id}/duplicate', [PollController::class, 'duplicate']);
 $router->get('/api/admin/polls/{id}/results', [ResultController::class, 'show']);
 $router->get('/api/admin/polls/{id}/teachers', [TeacherResultController::class, 'ranking']);
+$router->get('/api/admin/polls/{id}/teachers/leaders', [TeacherResultController::class, 'leaders']);
 $router->get('/api/admin/polls/{id}/teachers/{teacher}/{subject}', [TeacherResultController::class, 'report']);
 
 // Teachers (from Tusome) and the Teaching list

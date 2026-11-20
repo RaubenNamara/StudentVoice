@@ -4,6 +4,7 @@ import { useRoute } from 'vue-router'
 import { ArrowDownTrayIcon, ChevronUpDownIcon, ExclamationTriangleIcon, MagnifyingGlassIcon, PrinterIcon } from '@heroicons/vue/24/outline'
 import PageHeader from '@/components/PageHeader.vue'
 import PrintHeader from '@/components/PrintHeader.vue'
+import PerformersChart from '@/components/PerformersChart.vue'
 import StatusChip from '@/components/StatusChip.vue'
 import { api } from '@/api'
 import { percent } from '@/feedback'
@@ -134,6 +135,8 @@ const print = () => window.print()
         </div>
       </div>
     </section>
+
+    <PerformersChart v-if="data.has_scale" :poll-id="data.poll.id" />
 
     <p v-if="!data.has_scale" class="card mb-6 p-4 text-sm text-gray-600">This poll has no agree/disagree (1-5) questions, so there are no scores; open a teacher to see their answers.</p>
 

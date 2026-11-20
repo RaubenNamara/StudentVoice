@@ -82,7 +82,22 @@ streams) says who teaches each subject in each stream; a subject with only one t
 automatically, and super admins set the rest (a sync never changes their choices; other admins can
 only view it).
 
-What a student does: their subjects show as tiles. They tap one, **choose their teacher from that
+**Upload from Excel** (Teachers page, super admins): a sheet of teachers with their subjects and
+streams fills the Teaching list in one go. It reads St Mark's timetable directory (Teacher Name ·
+Department · Subjects Taught · All Streams Taught or S1-S6 Streams), a ✓ grid with a column per
+stream, or a plain Teacher · Subject · Class · Stream list. Names are matched to Tusome's whatever the
+word order and with small spelling slips (MARVIN ESETE = Esete Marvin, CHEPTOEK = Chepteok); anyone
+not found is added. Elective blocks (AGR/F.ART/LUG/TD) and CRE/IRE are settled from Tusome's record
+of the teacher, or the subject common to all their blocks. A teacher with several subjects gets each
+only where students take it and where another teacher doesn't already cover it; English is O-Level
+only, General Paper and Subsidiary Maths A-Level only. A preview shows matches, new teachers,
+anything unclear and streams where several teachers share a subject, then **Replace** (the file's
+streams get exactly its teachers) or **Only fill gaps**. Teachers added from a file are kept by
+Tusome syncs.
+
+What a student does: their subjects show as tiles - their own subjects (per Tusome) first, then
+**Electives, only if you take them** (optional; once their own subjects are done they can finish).
+A subject with several listed teachers shows them as cards: the student rates theirs, then "I'm done". They tap one, **choose their teacher from that
 subject's department** (already chosen when the Teaching list or Tusome names one; they can change it),
 then answer **one statement at a time** with big 1-5 buttons that move on by themselves, with the
 optional comments together at the end. "I don't take this subject" closes a subject. Choosing someone

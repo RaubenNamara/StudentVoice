@@ -84,7 +84,7 @@ onMounted(async () => {
           </div>
         </div>
         <div v-if="p.about === 'teachers'" class="relative mt-5">
-          <div class="flex justify-between text-xs text-indigo-100"><span>{{ p.handled }} of {{ p.teachers }} teachers done</span><span>about a minute each</span></div>
+          <div class="flex justify-between text-xs text-indigo-100"><span>{{ p.handled }} of {{ p.teachers }} subjects done</span><span>about a minute each</span></div>
           <div class="mt-1.5 h-2 overflow-hidden rounded-full bg-white/15"><div class="h-2 rounded-full bg-gold-400" :style="{ width: `${p.teachers ? ((p.handled ?? 0) / p.teachers) * 100 : 0}%` }" /></div>
         </div>
         <div class="relative mt-5 flex items-center justify-between">

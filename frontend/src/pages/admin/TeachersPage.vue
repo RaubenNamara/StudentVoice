@@ -2,6 +2,7 @@
 import { computed, onMounted, ref, watch } from 'vue'
 import { ArrowPathIcon, ExclamationTriangleIcon, MagnifyingGlassIcon, PlusIcon } from '@heroicons/vue/24/outline'
 import PageHeader from '@/components/PageHeader.vue'
+import TeachingUpload from '@/components/TeachingUpload.vue'
 import { api, ApiError } from '@/api'
 import { formatDate, toast } from '@/feedback'
 import { CLASSES } from '@/types'
@@ -17,7 +18,7 @@ interface Overview {
   subjects: number
 }
 interface Person { id: number; name: string }
-interface Cell { takers: number; teachers: { teacher_id: number; source: 'auto' | 'admin' }[] }
+interface Cell { takers: number; teachers: { teacher_id: number; source: 'auto' | 'admin' | 'upload' }[] }
 interface Grid {
   class: string
   streams: { stream: string; students: number }[]
@@ -43,7 +44,8 @@ async function loadGrid() {
   grid.value = null
   grid.value = await api.get<Grid>('/admin/teaching', { class: klass.value })
 }
-onMounted(() => Promise.all([loadOverview(), loadGrid()]))
+const reloadAll = () => Promise.all([loadOverview(), loadGrid()])
+onMounted(reloadAll)
 watch(klass, loadGrid)
 
 async function sync() {
@@ -128,6 +130,8 @@ const shownTeachers = computed(() => {
     </button>
   </section>
 
+  <TeachingUpload v-if="session.isSuper" @done="reloadAll" />
+
   <!-- Teaching list -->
   <section class="card overflow-hidden">
     <div class="flex flex-wrap items-center justify-between gap-3 border-b border-line p-4">
@@ -197,8 +201,9 @@ const shownTeachers = computed(() => {
                   </select>
                   <div class="mt-0.5 flex justify-between px-1 text-[0.68rem] text-gray-500">
                     <span>{{ sub.cells[st.stream].takers ? `${sub.cells[st.stream].takers} take it` : grid.has_subject_data ? 'not in Tusome' : '' }}</span>
-                    <span v-if="sub.cells[st.stream].teachers.length > 1">+{{ sub.cells[st.stream].teachers.length - 1 }} more</span>
+                    <span v-if="sub.cells[st.stream].teachers.length > 1" class="font-semibold text-indigo-700 dark:text-indigo-300" :title="sub.cells[st.stream].teachers.map((x) => nameOf[x.teacher_id]).join(', ')">+{{ sub.cells[st.stream].teachers.length - 1 }} more</span>
                     <span v-else-if="sub.cells[st.stream].teachers[0]?.source === 'auto'" title="Filled in because this subject has only one teacher">auto</span>
+                    <span v-else-if="sub.cells[st.stream].teachers[0]?.source === 'upload'" title="From the Excel upload">Excel</span>
                   </div>
                 </div>
               </td>

@@ -8,6 +8,7 @@ use StudentVoice\Auth\Auth;
 use StudentVoice\Database;
 use StudentVoice\Http\Request;
 use StudentVoice\Http\Response;
+use StudentVoice\Services\TeachingImport;
 use StudentVoice\Services\TeachingList;
 use StudentVoice\Services\TusomeSync;
 use StudentVoice\Support\Polls;
@@ -81,6 +82,36 @@ final class TeacherController
             }
         });
         Response::ok(['gaps' => TeachingList::gapCount($db)]);
+    }
+
+    /** Excel upload, step 1: what the file would do (nothing changes) */
+    public function importPreview(Request $r): never
+    {
+        Response::ok((new TeachingImport(Database::get()))->preview($this->importRows($r)));
+    }
+
+    /** Excel upload, step 2: write it. mode 'replace' (streams in the file) or 'fill' (empty cells only) */
+    public function importApply(Request $r): never
+    {
+        $mode = $r->string('mode') === 'fill' ? 'fill' : 'replace';
+        Response::ok((new TeachingImport(Database::get()))->apply($this->importRows($r), $mode));
+    }
+
+    private function importRows(Request $r): array
+    {
+        $rows = $r->input('rows', []);
+        if (!is_array($rows) || !$rows) {
+            Response::error('The file had no teachers in it.', 422);
+        }
+        if (count($rows) > 3000) {
+            Response::error('That file is too big (more than 3000 rows).', 422);
+        }
+        return array_map(fn ($row) => [
+            'name' => mb_substr((string) ($row['name'] ?? ''), 0, 190),
+            'department' => mb_substr((string) ($row['department'] ?? ''), 0, 190),
+            'subjects' => mb_substr((string) ($row['subjects'] ?? ''), 0, 1000),
+            'streams' => array_slice(array_map('strval', (array) ($row['streams'] ?? [])), 0, 80),
+        ], array_values(array_filter($rows, 'is_array')));
     }
 
     /** A teacher everywhere they are on the list: copy one stream's cell to the class's other streams */

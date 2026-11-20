@@ -23,6 +23,7 @@ interface Subject {
   options: Person[]
   rated: number[]
   question_ids: number[]
+  elective: boolean
 }
 interface VotePoll {
   id: number
@@ -54,8 +55,13 @@ const round = ref(0)
 
 const isTeachers = computed(() => poll.value?.about === 'teachers')
 const subjects = computed(() => poll.value?.subjects ?? [])
-const totalPlaces = computed(() => subjects.value.reduce((s, x) => s + x.places, 0))
-const donePlaces = computed(() => subjects.value.reduce((s, x) => s + x.done, 0))
+// progress is by subject (one with several listed teachers is a single step), counting the
+// student's own subjects; electives are optional
+const core = computed(() => subjects.value.filter((x) => !x.elective))
+const electives = computed(() => subjects.value.filter((x) => x.elective))
+const totalPlaces = computed(() => core.value.length)
+const donePlaces = computed(() => core.value.filter((x) => !open(x)).length)
+const coreDone = computed(() => !core.value.some(open))
 const open = (s: Subject) => s.done < s.places
 
 onMounted(async () => {
@@ -107,7 +113,13 @@ function backToSubjects() {
 
 async function notTaking() {
   const s = subject.value!
-  if (!(await confirm(`You don't take ${s.subject}?`, `${s.subject} will be taken off your list for this poll.`, `I don't take ${s.subject}`))) return
+  const name = subjectLook(s.subject).name
+  const ask = s.rated.length
+    ? [`Done with ${name}?`, 'The other teachers listed will be marked as not your teacher.', `I'm done with ${name}`]
+    : s.places > 1
+      ? [`None of these teach you ${name}?`, `${name} will be taken off your list for this poll.`, 'None of these']
+      : [`You don't take ${name}?`, `${name} will be taken off your list for this poll.`, `I don't take ${name}`]
+  if (!(await confirm(ask[0], ask[1], ask[2]))) return
   try {
     await api.post(`/vote/polls/${poll.value!.id}/skip`, { subject_id: s.subject_id })
     s.skipped = true
@@ -128,7 +140,14 @@ async function send(answers: Record<number, unknown>) {
     if (s) {
       s.rated.push(Number(teacherId.value))
       s.done = Math.min(s.places, s.done + 1)
-      await afterSubject(s)
+      if (open(s)) {
+        // several listed teachers: back to them, to rate another or say they are done
+        toast(`Thank you - ${teacher.value?.name ?? 'teacher'} rated.`)
+        stage.value = 'subject'
+        window.scrollTo({ top: 0 })
+      } else {
+        await afterSubject(s)
+      }
     } else {
       await finish()
     }
@@ -155,6 +174,7 @@ async function afterSubject(s: Subject) {
   justDone.value = s.subject_id
   setTimeout(() => (justDone.value = null), 1600)
   backToSubjects()
+  // nothing left: finished. Own subjects done but electives open: the "Finish" banner shows
   if (!subjects.value.some(open)) await finish()
 }
 
@@ -231,7 +251,7 @@ const initials = (name: string) => name.split(' ').filter(Boolean).slice(0, 2).m
           <div class="p-6 sm:p-8">
             <!-- The school has set the teacher: just their card(s), no choosing -->
             <template v-if="fixed">
-              <p class="text-sm font-medium text-gray-600">{{ subject.places > 1 ? `Your ${look(subject.subject).name} teachers - rate each one` : `Your ${look(subject.subject).name} teacher` }}</p>
+              <p class="text-sm font-medium text-gray-600">{{ subject.places > 1 ? `Which of these teaches you ${look(subject.subject).name}? Rate yours.` : `Your ${look(subject.subject).name} teacher` }}</p>
               <ul class="mt-3 space-y-3">
                 <li v-for="t in subject.assigned" :key="t.id" class="flex items-center gap-4 rounded-2xl border border-line bg-gray-50 p-4">
                   <div class="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-indigo-600 to-indigo-800 text-lg font-semibold text-white shadow">{{ initials(t.name) }}</div>
@@ -240,10 +260,11 @@ const initials = (name: string) => name.split(' ').filter(Boolean).slice(0, 2).m
                     <p class="text-sm text-gray-500">{{ questions.filter((q) => q.type !== 'text').length }} quick questions · about a minute</p>
                   </div>
                   <span v-if="subject.rated.includes(t.id)" class="chip bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300"><CheckIcon class="h-3.5 w-3.5" /> Done</span>
+                  <button v-else-if="subject.places > 1" class="btn-primary shrink-0 rounded-full px-4" @click="rateListed(t)">Rate</button>
                 </li>
               </ul>
               <button
-                v-for="t in listed.slice(0, 1)"
+                v-for="t in subject.places === 1 ? listed : []"
                 :key="t.id"
                 class="mt-6 flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-indigo-700 to-indigo-600 py-3.5 text-base font-semibold text-white shadow-sm transition hover:from-indigo-800 hover:to-indigo-700"
                 @click="rateListed(t)"
@@ -268,7 +289,8 @@ const initials = (name: string) => name.split(' ').filter(Boolean).slice(0, 2).m
               </button>
             </template>
 
-            <button v-if="!subject.rated.length" class="btn-ghost mx-auto mt-3 block text-sm text-gray-500" @click="notTaking">I don't take {{ look(subject.subject).name }}</button>
+            <button v-if="subject.rated.length" class="btn-secondary mt-5 w-full py-3" @click="notTaking"><CheckIcon class="h-4 w-4" /> I'm done with {{ look(subject.subject).name }}</button>
+            <button v-else class="btn-ghost mx-auto mt-3 block text-sm text-gray-500" @click="notTaking">{{ subject.places > 1 ? 'None of these / ' : '' }}I don't take {{ look(subject.subject).name }}</button>
           </div>
         </div>
       </template>
@@ -288,13 +310,18 @@ const initials = (name: string) => name.split(' ').filter(Boolean).slice(0, 2).m
           </div>
           <div>
             <p class="font-semibold">{{ donePlaces === 0 ? 'Ready when you are' : donePlaces * 2 >= totalPlaces ? 'More than halfway!' : 'Nice going' }}</p>
-            <p class="text-sm text-gray-500">{{ totalPlaces - donePlaces }} teacher{{ totalPlaces - donePlaces === 1 ? '' : 's' }} to go · about a minute each</p>
+            <p class="text-sm text-gray-500">{{ totalPlaces - donePlaces }} subject{{ totalPlaces - donePlaces === 1 ? '' : 's' }} to go · about a minute each</p>
           </div>
         </div>
 
+        <div v-if="coreDone && electives.length" class="mt-6 flex flex-col gap-3 rounded-2xl bg-emerald-50 p-4 sm:flex-row sm:items-center dark:bg-emerald-950/40">
+          <p class="flex-1 text-sm font-medium text-emerald-900 dark:text-emerald-200">All your subjects are done. Rate an elective below if you take one, or finish now.</p>
+          <button class="btn-primary shrink-0" @click="finish">Finish</button>
+        </div>
+        <h2 v-if="electives.length" class="mt-7 text-sm font-semibold text-gray-600">Your subjects</h2>
         <div class="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-3">
           <button
-            v-for="s in subjects"
+            v-for="s in core"
             :key="s.subject_id"
             class="group relative flex min-h-[9rem] flex-col rounded-2xl border border-line bg-surface p-4 text-left shadow-card transition"
             :class="[open(s) ? 'hover:-translate-y-1 hover:shadow-lift' : 'cursor-default opacity-75', justDone === s.subject_id ? 'ring-4 ring-emerald-300' : '']"
@@ -309,12 +336,38 @@ const initials = (name: string) => name.split(' ').filter(Boolean).slice(0, 2).m
             <span class="mt-auto pt-2 text-xs text-gray-500">
               <template v-if="s.skipped">Not taking it</template>
               <template v-else-if="!open(s)">Done - thank you</template>
-              <template v-else-if="s.places > 1">{{ s.done }} of {{ s.places }} teachers</template>
+              <template v-else-if="s.places > 1">{{ s.rated.length ? `${s.rated.length} rated` : `Choose from ${s.places} teachers` }}</template>
               <span v-else-if="s.assigned[0]" class="font-medium text-ink">{{ s.assigned[0].name }}</span>
               <template v-else>Choose your teacher</template>
             </span>
           </button>
         </div>
+        <template v-if="electives.length">
+          <h2 class="mt-8 text-sm font-semibold text-gray-600">Electives <span class="font-normal text-gray-500">- only if you take them</span></h2>
+          <div class="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3">
+            <button
+              v-for="s in electives"
+              :key="s.subject_id"
+              class="group relative flex min-h-[9rem] flex-col rounded-2xl border border-line bg-surface p-4 text-left shadow-card transition"
+              :class="[open(s) ? 'hover:-translate-y-1 hover:shadow-lift' : 'cursor-default opacity-75', justDone === s.subject_id ? 'ring-4 ring-emerald-300' : '']"
+              :disabled="!open(s)"
+              @click="openSubject(s)"
+            >
+              <div class="flex items-start justify-between">
+                <div class="flex h-11 w-11 items-center justify-center rounded-xl" :class="look(s.subject).tone"><component :is="look(s.subject).icon" class="h-6 w-6" /></div>
+                <span v-if="!open(s) && !s.skipped" class="flex h-7 w-7 items-center justify-center rounded-full bg-emerald-600 text-white"><CheckIcon class="h-4 w-4" /></span>
+              </div>
+              <span class="mt-3 font-semibold leading-tight">{{ look(s.subject).name }}</span>
+              <span class="mt-auto pt-2 text-xs text-gray-500">
+                <template v-if="s.skipped">Not taking it</template>
+                <template v-else-if="!open(s)">Done - thank you</template>
+                <template v-else-if="s.places > 1">{{ s.rated.length ? `${s.rated.length} rated` : `Choose from ${s.places} teachers` }}</template>
+                <span v-else-if="s.assigned[0]" class="font-medium text-ink">{{ s.assigned[0].name }}</span>
+                <template v-else>Choose your teacher</template>
+              </span>
+            </button>
+          </div>
+        </template>
         <p class="mt-6 text-center text-xs text-gray-500">Your answers never show your name. Teachers never see who said what.</p>
       </template>
 

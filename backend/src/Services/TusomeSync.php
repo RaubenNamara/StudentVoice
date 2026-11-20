@@ -104,7 +104,7 @@ final class TusomeSync
     private function sync(array $d): array
     {
         $db = $this->db;
-        $active = (int) $db->query("SELECT COUNT(*) FROM teachers WHERE status = 'active'")->fetchColumn();
+        $active = (int) $db->query("SELECT COUNT(*) FROM teachers WHERE status = 'active' AND tusome_id IS NOT NULL")->fetchColumn();
         if (count($d['teachers']) < self::MIN_TEACHER_SHARE * $active) {
             throw new \RuntimeException(sprintf('Tusome sent only %d teachers but %d are active here. That looks like a Tusome problem, so nothing was changed.', count($d['teachers']), $active));
         }
@@ -113,7 +113,7 @@ final class TusomeSync
 
         // subjects and teachers, matched on Tusome's ids
         $subjectIds = $this->upsert('subjects', $d['subjects'], fn ($s) => ['name' => mb_substr(trim((string) $s['name']), 0, 150)]);
-        $before = $db->query("SELECT tusome_id FROM teachers WHERE status = 'active'")->fetchAll(PDO::FETCH_COLUMN);
+        $before = $db->query("SELECT tusome_id FROM teachers WHERE status = 'active' AND tusome_id IS NOT NULL")->fetchAll(PDO::FETCH_COLUMN);
         $teacherIds = $this->upsert('teachers', $d['teachers'], fn ($t) => [
             'name' => mb_substr(trim((string) preg_replace('/\s+/', ' ', (string) $t['name'])), 0, 190) ?: 'Teacher ' . $t['id'],
             'employee_number' => isset($t['employee_number']) && $t['employee_number'] !== '' ? mb_substr((string) $t['employee_number'], 0, 50) : null,
@@ -127,7 +127,7 @@ final class TusomeSync
             $studentIds[SmisSync::key($s['reg_no'])] = (int) $s['id'];
         }
 
-        $db->exec('DELETE FROM teacher_subjects');
+        $db->exec("DELETE ts FROM teacher_subjects ts JOIN teachers t ON t.id = ts.teacher_id WHERE t.source = 'tusome'");
         $rows = [];
         foreach ($d['teacher_subjects'] as [$t, $s]) {
             if (isset($teacherIds[(int) $t], $subjectIds[(int) $s])) {
@@ -174,7 +174,8 @@ final class TusomeSync
     private function upsert(string $table, array $items, callable $fields): array
     {
         $map = [];
-        foreach ($this->db->query("SELECT id, tusome_id FROM $table")->fetchAll() as $r) {
+        // rows added from an Excel upload (no Tusome id) are not Tusome's to update or retire
+        foreach ($this->db->query("SELECT id, tusome_id FROM $table WHERE tusome_id IS NOT NULL")->fetchAll() as $r) {
             $map[(int) $r['tusome_id']] = (int) $r['id'];
         }
         $seen = [];

@@ -63,6 +63,8 @@ $router->post('/api/admin/teachers/sync', [TeacherController::class, 'sync']);
 $router->get('/api/admin/teaching', [TeacherController::class, 'grid']);
 $router->post('/api/admin/teaching', [TeacherController::class, 'setCell'], $super);
 $router->post('/api/admin/teaching/fill-class', [TeacherController::class, 'fillClass'], $super);
+$router->post('/api/admin/teaching/import/preview', [TeacherController::class, 'importPreview'], $super);
+$router->post('/api/admin/teaching/import/apply', [TeacherController::class, 'importApply'], $super);
 
 // Super admins: the admin accounts
 $router->get('/api/admin/admins', [AdminController::class, 'index'], $super);

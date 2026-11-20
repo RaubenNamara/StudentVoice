@@ -54,8 +54,10 @@ final class VoteController
             ];
             if ($p['about'] === 'teachers') {
                 $subjects = $this->subjects($db, $p, $student);
-                $item['teachers'] = array_sum(array_column($subjects, 'places'));
-                $item['handled'] = array_sum(array_column($subjects, 'done'));
+                // progress counts subjects (a subject with several listed teachers is one step)
+                $core = array_filter($subjects, fn ($x) => !$x['elective']) ?: $subjects;
+                $item['teachers'] = count($core);
+                $item['handled'] = count(array_filter($core, fn ($x) => $x['done'] >= $x['places']));
                 $item['subjects'] = count($subjects);
                 $item['voted'] = $subjects && $item['handled'] >= $item['teachers'];
                 if (!$subjects || (!$p['accepting'] && !$item['handled'])) {
@@ -97,6 +99,7 @@ final class VoteController
                 'options' => $people($s['options']),
                 'rated' => $s['rated'],
                 'question_ids' => $s['question_ids'],
+                'elective' => $s['elective'],
             ], $subjects);
         }
         Response::ok($out);
@@ -172,7 +175,11 @@ final class VoteController
         Response::ok(['voted' => true]);
     }
 
-    /** "I don't take this subject": the subject is done; its listed teachers get a "not my teacher" */
+    /**
+     * Closes a subject: "I don't take this subject" (nothing rated), or "I'm done" after rating
+     * the one(s) of several listed teachers who teach them. Listed teachers they didn't rate get a
+     * "not my teacher", so admins can correct the list.
+     */
     public function skip(Request $r): never
     {
         [$poll, $student, $subjects] = $this->votable((int) $r->param('id'));
@@ -180,13 +187,11 @@ final class VoteController
             Response::error('Only teacher polls have this.', 422);
         }
         [$subject] = $this->pickSubject($r, $subjects, false);
-        if ($subject['rated']) {
-            Response::error('You have already rated a teacher for this subject.', 409);
-        }
-        Database::transaction(function (PDO $db) use ($poll, $student, $subject) {
+        $unrated = array_values(array_diff($subject['assigned'], $subject['rated']));
+        Database::transaction(function (PDO $db) use ($poll, $student, $subject, $unrated) {
             $db->prepare('INSERT IGNORE INTO vote_gates (poll_id, gate, teacher_id, subject_id, skipped) VALUES (?, ?, 0, ?, 1)')
                 ->execute([$poll['id'], Gate::for($poll['id'], (int) $student['id'], 0, $subject['subject_id']), $subject['subject_id']]);
-            $this->markNotMine($db, $poll['id'], (int) $student['id'], $subject['subject_id'], $subject['assigned']);
+            $this->markNotMine($db, $poll['id'], (int) $student['id'], $subject['subject_id'], $unrated);
         });
         Response::ok();
     }
@@ -207,6 +212,11 @@ final class VoteController
     private function subjects(PDO $db, array $poll, array $student): array
     {
         $list = TeachingList::subjectsFor($db, $student);
+        // subjects Tusome says this student takes; others on their stream's list are electives
+        // (optional: only if they take them). With no Tusome subjects at all, none are electives.
+        $mine = $db->prepare('SELECT subject_id FROM student_subjects WHERE student_id = ?');
+        $mine->execute([$student['id']]);
+        $mine = array_flip(array_map('intval', $mine->fetchAll(PDO::FETCH_COLUMN)));
         if (!$list) {
             return [];
         }
@@ -238,6 +248,7 @@ final class VoteController
                 'assigned' => $assigned,
                 'options' => $options,
                 'places' => max(1, count($assigned)),
+                'elective' => $mine && !isset($mine[$su]),
                 'rated' => [],
                 'skipped' => false,
                 'done' => 0,
@@ -337,7 +348,7 @@ final class VoteController
             if (!$subjects) {
                 Response::error('No subjects are listed for you yet. Tell the person running the vote.', 404);
             }
-            if (array_sum(array_column($subjects, 'done')) >= array_sum(array_column($subjects, 'places'))) {
+            if (!array_filter($subjects, fn ($x) => $x['done'] < $x['places'])) {
                 Response::error('You have rated all your teachers in this poll. Thank you!', 409, ['code' => 'already_voted']);
             }
             return [$poll, $student, $subjects];

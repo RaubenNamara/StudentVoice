@@ -46,6 +46,8 @@ export default {
           900: '#18165a',
           950: '#0f0d3c',
         },
+        // agree/disagree scale 1-5 (CSS variables: light and dark steps, see style.css)
+        lk: Object.fromEntries([1, 2, 3, 4, 5].map((n) => [n, v(`lk-${n}`)])),
         // the crest's sky blue
         crest: {
           50: '#eef8fd',

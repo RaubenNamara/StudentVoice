@@ -174,6 +174,16 @@ final class TeacherResultController
             $school[(int) $qid] = [(int) $sum, (int) $cnt];
         }
 
+        // the whole poll's spread of answers per statement (for "this teacher vs the school")
+        $schoolCounts = [];
+        $stmt = $db->prepare("SELECT a.question_id, a.value_num, COUNT(*) FROM answers a JOIN ballots b ON b.id = a.ballot_id JOIN questions q ON q.id = a.question_id AND q.type = 'scale' WHERE b.poll_id = ? GROUP BY a.question_id, a.value_num");
+        $stmt->execute([$poll['id']]);
+        foreach ($stmt->fetchAll(PDO::FETCH_NUM) as [$qid, $v, $cnt]) {
+            if ($v >= 1 && $v <= 5) {
+                $schoolCounts[(int) $qid][(int) $v - 1] = (int) $cnt;
+            }
+        }
+
         $scaleRows = [];
         $others = [];
         $secMine = [];
@@ -189,6 +199,7 @@ final class TeacherResultController
                 $secSchool[$sec][1] = ($secSchool[$sec][1] ?? 0) + ($school[$q['id']][1] ?? 0);
                 $summary = ResultController::summarise($q, $answers, $ballots);
                 $summary['school_average'] = ($school[$q['id']][1] ?? 0) ? round($school[$q['id']][0] / $school[$q['id']][1], 2) : null;
+                $summary['school_counts'] = array_replace(array_fill(0, 5, 0), $schoolCounts[$q['id']] ?? []);
                 $scaleRows[] = $summary;
             } else {
                 $others[] = ResultController::summarise($q, $answers, $ballots);

@@ -178,12 +178,20 @@ async function afterSubject(s: Subject) {
   if (!subjects.value.some(open)) await finish()
 }
 
+/** Stop before every subject is done: what they sent is saved; nothing is needed for the rest */
+async function finishEarly() {
+  const left = core.value.filter(open).length
+  if (!(await confirm('Finish now?', `Your answers so far are saved. You are leaving ${left} subject${left === 1 ? '' : 's'} without a rating - that's fine if you have nothing to say about ${left === 1 ? 'it' : 'them'}.`, 'Finish now'))) return
+  await finish()
+}
+
 async function finish() {
   finished.value = true
   window.scrollTo({ top: 0 })
   // Shared computers (labs, the library): nothing else to answer, so sign out for the next student
-  const polls = await api.get<{ accepting: boolean; voted: boolean }[]>('/vote/polls').catch(() => [])
-  moreWaiting.value = polls.filter((p) => p.accepting && !p.voted).length
+  const polls = await api.get<{ id: number; accepting: boolean; voted: boolean }[]>('/vote/polls').catch(() => [])
+  // this poll is finished for now even if some subjects were left out
+  moreWaiting.value = polls.filter((p) => p.accepting && !p.voted && p.id !== poll.value?.id).length
   if (!moreWaiting.value) await session.studentLogout()
 }
 
@@ -368,6 +376,10 @@ const initials = (name: string) => name.split(' ').filter(Boolean).slice(0, 2).m
             </button>
           </div>
         </template>
+        <div v-if="!coreDone" class="mt-8 flex flex-col items-center gap-2 rounded-2xl border border-dashed border-line p-5 text-center">
+          <p class="text-sm text-gray-600">Nothing to say about some teachers? You don't have to rate every subject. Each teacher you rate is saved straight away.</p>
+          <button class="btn-secondary" @click="finishEarly">{{ donePlaces ? "I'm finished" : 'Finish without rating' }}</button>
+        </div>
         <p class="mt-6 text-center text-xs text-gray-500">Your answers never show your name. Teachers never see who said what.</p>
       </template>
 

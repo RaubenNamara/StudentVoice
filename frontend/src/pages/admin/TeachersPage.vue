@@ -3,6 +3,8 @@ import { computed, onMounted, ref, watch } from 'vue'
 import { ArrowPathIcon, ExclamationTriangleIcon, MagnifyingGlassIcon, PlusIcon } from '@heroicons/vue/24/outline'
 import PageHeader from '@/components/PageHeader.vue'
 import TeachingUpload from '@/components/TeachingUpload.vue'
+import Modal from '@/components/Modal.vue'
+import { fmt, scoreCell } from '@/scores'
 import { api, ApiError } from '@/api'
 import { formatDate, toast } from '@/feedback'
 import { CLASSES } from '@/types'
@@ -104,6 +106,17 @@ const classGaps = computed(() => {
   for (const s of grid.value?.subjects ?? []) for (const c of Object.values(s.cells)) if (c.takers > 0 && !c.teachers.length) n++
   return n
 })
+/** Clicking a teacher: their results in every teacher poll, each opening the full report */
+interface TeacherReports {
+  teacher: { id: number; name: string; employee_number: string | null }
+  reports: { poll_id: number; title: string; status: string; opened_at: string | null; subject_id: number; subject: string; ratings: number; overall: number | null }[]
+  min_group: number
+}
+const reportsOf = ref<TeacherReports | null>(null)
+async function openTeacher(t: TeacherRow) {
+  reportsOf.value = await api.get<TeacherReports>(`/admin/teachers/${t.id}/reports`)
+}
+
 const shownTeachers = computed(() => {
   const term = q.value.trim().toLowerCase()
   return (overview.value?.teachers ?? []).filter((t) => !term || t.name.toLowerCase().includes(term) || (t.subjects ?? '').toLowerCase().includes(term))
@@ -243,7 +256,7 @@ const shownTeachers = computed(() => {
         <thead class="table-head sticky top-0"><tr><th class="px-4 py-2">Teacher</th><th class="px-4 py-2">Subjects (Tusome)</th><th class="px-4 py-2 text-right">Streams on the list</th></tr></thead>
         <tbody class="divide-y divide-line">
           <tr v-for="t in shownTeachers" :key="t.id" :class="t.status === 'gone' ? 'opacity-50' : ''">
-            <td class="px-4 py-2"><div class="font-medium">{{ t.name }}</div><div class="text-xs text-gray-500">{{ t.employee_number }}<template v-if="t.status === 'gone'"> · no longer in Tusome</template></div></td>
+            <td class="px-4 py-2"><button class="text-left font-medium text-indigo-800 hover:underline dark:text-indigo-300" @click="openTeacher(t)">{{ t.name }}</button><div class="text-xs text-gray-500">{{ t.employee_number }}<template v-if="t.status === 'gone'"> · no longer in Tusome</template></div></td>
             <td class="px-4 py-2 text-gray-600">{{ t.subjects ?? '—' }}</td>
             <td class="px-4 py-2 text-right tabular-nums">{{ t.streams }}</td>
           </tr>
@@ -251,4 +264,21 @@ const shownTeachers = computed(() => {
       </table>
     </div>
   </section>
+  <Modal v-if="reportsOf" :title="reportsOf.teacher.name" wide @close="reportsOf = null">
+    <p v-if="!reportsOf.reports.length" class="py-6 text-center text-sm text-gray-500">No student has rated this teacher yet.</p>
+    <template v-else>
+      <p class="text-sm text-gray-600">Results in each teacher poll. Open one for the full report (every statement, charts, comments) to view or print.</p>
+      <ul class="mt-4 divide-y divide-line">
+        <li v-for="x in reportsOf.reports" :key="`${x.poll_id}-${x.subject_id}`" class="flex flex-wrap items-center gap-3 py-3">
+          <div class="min-w-0 flex-1">
+            <p class="font-medium">{{ x.title }}</p>
+            <p class="text-xs text-gray-500">{{ x.subject }} · {{ x.ratings }} ratings<template v-if="x.opened_at"> · {{ formatDate(x.opened_at, false) }}</template></p>
+          </div>
+          <span v-if="x.overall != null" class="rounded-md px-2.5 py-1 font-semibold tabular-nums" :class="scoreCell(x.overall)">{{ fmt(x.overall) }}</span>
+          <span v-else class="text-xs text-gray-500">under {{ reportsOf.min_group }} ratings</span>
+          <RouterLink :to="{ name: 'teacher-report', params: { id: x.poll_id, teacher: reportsOf.teacher.id, subject: x.subject_id } }" class="btn-primary py-1.5" @click="reportsOf = null">Open report</RouterLink>
+        </li>
+      </ul>
+    </template>
+  </Modal>
 </template>

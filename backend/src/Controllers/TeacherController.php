@@ -90,6 +90,46 @@ final class TeacherController
         Response::ok((new TeachingImport(Database::get()))->preview($this->importRows($r)));
     }
 
+    /** One teacher's results in every teacher poll (per subject), to open their reports */
+    public function reports(Request $r): never
+    {
+        $db = Database::get();
+        $teacher = $db->prepare('SELECT id, name, employee_number, status FROM teachers WHERE id = ?');
+        $teacher->execute([(int) $r->param('id')]);
+        $teacher = $teacher->fetch();
+        if (!$teacher) {
+            Response::error('Teacher not found.', 404);
+        }
+        $stmt = $db->prepare(
+            "SELECT p.id AS poll_id, p.title, p.status, p.opened_at, b.subject_id, s.name AS subject,
+                    COUNT(DISTINCT b.id) AS ratings,
+                    AVG(CASE WHEN q.type = 'scale' THEN a.value_num END) AS overall
+             FROM ballots b
+             JOIN polls p ON p.id = b.poll_id
+             JOIN subjects s ON s.id = b.subject_id
+             LEFT JOIN answers a ON a.ballot_id = b.id
+             LEFT JOIN questions q ON q.id = a.question_id
+             WHERE b.teacher_id = ?
+             GROUP BY p.id, p.title, p.status, p.opened_at, b.subject_id, s.name
+             ORDER BY p.opened_at DESC, s.name"
+        );
+        $stmt->execute([$teacher['id']]);
+        $rows = array_map(function ($row) {
+            $enough = (int) $row['ratings'] >= Polls::MIN_GROUP;
+            return [
+                'poll_id' => (int) $row['poll_id'],
+                'title' => $row['title'],
+                'status' => $row['status'],
+                'opened_at' => $row['opened_at'],
+                'subject_id' => (int) $row['subject_id'],
+                'subject' => $row['subject'],
+                'ratings' => (int) $row['ratings'],
+                'overall' => $enough && $row['overall'] !== null ? round((float) $row['overall'], 2) : null,
+            ];
+        }, $stmt->fetchAll());
+        Response::ok(['teacher' => $teacher, 'reports' => $rows, 'min_group' => Polls::MIN_GROUP]);
+    }
+
     /** Excel upload, step 2: write it. mode 'replace' (streams in the file) or 'fill' (empty cells only) */
     public function importApply(Request $r): never
     {

@@ -28,10 +28,10 @@ async function logout() {
 </script>
 
 <template>
-  <div class="min-h-screen bg-paper lg:flex">
+  <div class="min-h-screen bg-paper lg:flex print:block print:bg-white">
     <!-- Sidebar -->
     <aside
-      class="fixed inset-y-0 left-0 z-40 flex w-64 flex-col bg-indigo-950 text-indigo-100 transition-transform lg:sticky lg:top-0 lg:h-screen lg:translate-x-0"
+      class="no-print fixed inset-y-0 left-0 z-40 flex w-64 flex-col bg-indigo-950 text-indigo-100 transition-transform lg:sticky lg:top-0 lg:h-screen lg:translate-x-0"
       :class="open ? 'translate-x-0' : '-translate-x-full'"
     >
       <div class="flex items-center gap-3 px-5 py-5">
@@ -68,15 +68,15 @@ async function logout() {
         </button>
       </div>
     </aside>
-    <div v-if="open" class="fixed inset-0 z-30 bg-indigo-950/40 lg:hidden" @click="open = false" />
+    <div v-if="open" class="no-print fixed inset-0 z-30 bg-indigo-950/40 lg:hidden" @click="open = false" />
 
     <div class="min-w-0 flex-1">
-      <header class="sticky top-0 z-20 flex items-center gap-2 border-b border-line bg-surface/90 px-4 py-2.5 backdrop-blur sm:px-6">
+      <header class="no-print sticky top-0 z-20 flex items-center gap-2 border-b border-line bg-surface/90 px-4 py-2.5 backdrop-blur sm:px-6">
         <button class="btn-ghost -ml-2 px-2 lg:hidden" aria-label="Open menu" @click="open = true"><Bars3Icon class="h-6 w-6" /></button>
         <span class="text-sm font-semibold lg:hidden">Student Voice</span>
         <div class="ml-auto"><ThemeToggle /></div>
       </header>
-      <main class="mx-auto max-w-6xl px-4 py-6 sm:px-6 lg:py-8">
+      <main class="mx-auto max-w-6xl px-4 py-6 sm:px-6 lg:py-8 print:max-w-none print:p-0">
         <RouterView />
       </main>
     </div>

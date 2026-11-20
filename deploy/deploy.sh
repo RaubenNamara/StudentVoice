@@ -34,7 +34,7 @@ mkdir -p "$BACKUPS"
 say "Building the frontend ($(git -C "$REPO" log -1 --format='%h %s' 2>/dev/null || echo 'unknown commit'))"
 cd "$REPO/frontend"
 npm ci --no-audit --no-fund --loglevel=error
-npx vite build --base=/ --outDir "$BUILD/dist" --emptyOutDir --logLevel warn
+node node_modules/vite/bin/vite.js build --base=/ --outDir "$BUILD/dist" --emptyOutDir --logLevel warn
 [ -f "$BUILD/dist/index.html" ] || { echo "The build made no index.html; live was not changed."; exit 1; }
 
 say "Backing up the database"

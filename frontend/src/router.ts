@@ -1,0 +1,66 @@
+import { createRouter, createWebHistory } from 'vue-router'
+import { useSession } from '@/stores/session'
+
+declare module 'vue-router' {
+  interface RouteMeta {
+    /** 'student': signed in with a voting number; 'admin': a signed-in admin */
+    needs?: 'student' | 'admin'
+    super?: boolean
+    title?: string
+  }
+}
+
+const router = createRouter({
+  history: createWebHistory(import.meta.env.BASE_URL),
+  scrollBehavior: (_to, _from, saved) => saved ?? { top: 0 },
+  routes: [
+    // Students
+    { path: '/', name: 'vote-login', component: () => import('@/pages/vote/VoteLoginPage.vue') },
+    { path: '/vote', name: 'vote-polls', component: () => import('@/pages/vote/VotePollsPage.vue'), meta: { needs: 'student', title: 'My polls' } },
+    { path: '/vote/:id(\\d+)', name: 'vote-poll', component: () => import('@/pages/vote/VotePollPage.vue'), meta: { needs: 'student', title: 'Vote' } },
+
+    // Admins
+    { path: '/admin/login', name: 'admin-login', component: () => import('@/pages/admin/AdminLoginPage.vue'), meta: { title: 'Admin sign in' } },
+    { path: '/admin/password', name: 'change-password', component: () => import('@/pages/admin/ChangePasswordPage.vue'), meta: { needs: 'admin', title: 'Choose a password' } },
+    { path: '/admin/slips', name: 'slips', component: () => import('@/pages/admin/SlipsPage.vue'), meta: { needs: 'admin', title: 'Voting slips' } },
+    {
+      path: '/admin',
+      component: () => import('@/layouts/AdminLayout.vue'),
+      meta: { needs: 'admin' },
+      children: [
+        { path: '', name: 'overview', component: () => import('@/pages/admin/OverviewPage.vue'), meta: { title: 'Overview' } },
+        { path: 'polls', name: 'polls', component: () => import('@/pages/admin/PollsPage.vue'), meta: { title: 'Polls' } },
+        { path: 'polls/:id(\\d+)', name: 'poll', component: () => import('@/pages/admin/PollEditPage.vue'), meta: { title: 'Poll' } },
+        { path: 'polls/:id(\\d+)/results', name: 'results', component: () => import('@/pages/admin/ResultsPage.vue'), meta: { title: 'Results' } },
+        { path: 'students', name: 'students', component: () => import('@/pages/admin/StudentsPage.vue'), meta: { title: 'Students' } },
+        { path: 'admins', name: 'admins', component: () => import('@/pages/admin/AdminsPage.vue'), meta: { title: 'Admins', super: true } },
+      ],
+    },
+    { path: '/:rest(.*)*', redirect: '/' },
+  ],
+})
+
+router.beforeEach(async (to) => {
+  const session = useSession()
+  try {
+    await session.load()
+  } catch {
+    // the server is unreachable: let the page show its own error
+  }
+  if (to.meta.needs === 'student' && !session.student) {
+    return { name: 'vote-login' }
+  }
+  if (to.meta.needs === 'admin') {
+    if (!session.admin) return { name: 'admin-login', query: { next: to.fullPath } }
+    if (session.admin.must_change_password && to.name !== 'change-password') return { name: 'change-password' }
+    if (to.meta.super && !session.isSuper) return { name: 'overview' }
+  }
+  if (to.name === 'admin-login' && session.admin) return { name: 'overview' }
+})
+
+router.afterEach((to) => {
+  const session = useSession()
+  document.title = [to.meta.title, 'Student Voice', session.school].filter(Boolean).join(' · ')
+})
+
+export default router

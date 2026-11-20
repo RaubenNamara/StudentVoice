@@ -1,0 +1,101 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Theme colours as "R G B" so Tailwind's /opacity works. `.dark` on <html> switches. */
+:root,
+.force-light {
+  --paper: 250 247 240;
+  --surface: 255 255 255;
+  --ink: 24 24 38;
+  --line: 233 228 216;
+  --g-50: 250 250 249;
+  --g-100: 245 244 241;
+  --g-200: 231 229 224;
+  --g-300: 214 211 204;
+  --g-400: 168 163 155;
+  --g-500: 120 115 108;
+  --g-600: 87 83 78;
+  --g-700: 68 64 60;
+  --g-800: 41 38 36;
+  --g-900: 28 25 23;
+  --g-950: 12 10 9;
+  color-scheme: light;
+}
+
+.dark {
+  --paper: 12 13 24;
+  --surface: 22 24 40;
+  --ink: 234 235 243;
+  --line: 40 43 64;
+  --g-50: 26 28 46;
+  --g-100: 32 35 55;
+  --g-200: 45 48 70;
+  --g-300: 62 66 90;
+  --g-400: 101 106 132;
+  --g-500: 140 145 170;
+  --g-600: 171 175 197;
+  --g-700: 197 200 217;
+  --g-800: 222 224 235;
+  --g-900: 239 240 246;
+  --g-950: 248 248 251;
+  color-scheme: dark;
+}
+
+html {
+  font-size: 15px;
+}
+@media (min-width: 1800px) {
+  html { font-size: 16px; }
+}
+
+body {
+  @apply bg-paper text-ink antialiased;
+}
+
+@media print {
+  body { background: #fff; }
+  .no-print { display: none !important; }
+}
+
+@layer components {
+  .btn {
+    @apply inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold transition duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-gold-400 focus-visible:ring-offset-2 focus-visible:ring-offset-paper active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50 disabled:active:scale-100;
+  }
+  .btn-primary {
+    @apply btn bg-indigo-700 text-white shadow-sm hover:bg-indigo-800;
+  }
+  .btn-gold {
+    @apply btn bg-gold-400 text-indigo-950 shadow-sm hover:bg-gold-300;
+  }
+  .btn-secondary {
+    @apply btn border border-line bg-surface text-ink shadow-sm hover:border-gray-300 hover:bg-gray-50;
+  }
+  .btn-ghost {
+    @apply btn text-gray-700 hover:bg-gray-100;
+  }
+  .btn-danger {
+    @apply btn border border-red-200 bg-surface text-red-700 hover:bg-red-50 dark:border-red-900 dark:text-red-400 dark:hover:bg-red-950/40;
+  }
+  .input {
+    @apply block w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm text-ink transition placeholder:text-gray-400 hover:border-gray-300 focus:border-indigo-600 focus:outline-none focus:ring-4 focus:ring-indigo-600/10 disabled:bg-gray-50 disabled:text-gray-500;
+  }
+  .label {
+    @apply mb-1.5 block text-sm font-semibold text-gray-800;
+  }
+  .card {
+    @apply rounded-2xl border border-line bg-surface shadow-card;
+  }
+  .eyebrow {
+    @apply text-xs font-semibold uppercase tracking-wider text-gray-500;
+  }
+  .field-error {
+    @apply mt-1 text-sm text-red-700 dark:text-red-400;
+  }
+  .chip {
+    @apply inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-semibold;
+  }
+  .table-head {
+    @apply border-b border-line bg-gray-50 text-left text-xs font-semibold uppercase tracking-wider text-gray-500;
+  }
+}

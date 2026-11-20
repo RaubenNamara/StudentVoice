@@ -1,0 +1,18 @@
+# Secrets and local settings
+backend/.env
+frontend/.env.local
+
+# Dependencies
+node_modules/
+vendor/
+
+# Sessions, uploads and logs
+backend/storage/
+*.log
+
+# Editors and OS
+.vscode/*
+!.vscode/extensions.json
+.idea/
+.DS_Store
+Thumbs.db

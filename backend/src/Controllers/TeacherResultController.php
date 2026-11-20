@@ -32,7 +32,7 @@ final class TeacherResultController
         $sums = $this->scaleSums($db, $poll['id']);
         $ballots = $this->ballotCounts($db, $poll['id']);
         $skips = [];
-        $stmt = $db->prepare('SELECT teacher_id, subject_id, COUNT(*) FROM vote_gates WHERE poll_id = ? AND skipped = 1 GROUP BY teacher_id, subject_id');
+        $stmt = $db->prepare('SELECT teacher_id, subject_id, COUNT(*) FROM vote_gates WHERE poll_id = ? AND skipped = 1 AND teacher_id <> 0 GROUP BY teacher_id, subject_id');
         $stmt->execute([$poll['id']]);
         foreach ($stmt->fetchAll(PDO::FETCH_NUM) as [$t, $s, $n]) {
             $skips["$t|$s"] = (int) $n;

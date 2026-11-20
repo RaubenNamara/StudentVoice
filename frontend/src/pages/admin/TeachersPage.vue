@@ -5,6 +5,9 @@ import PageHeader from '@/components/PageHeader.vue'
 import { api, ApiError } from '@/api'
 import { formatDate, toast } from '@/feedback'
 import { CLASSES } from '@/types'
+import { useSession } from '@/stores/session'
+
+const session = useSession()
 
 interface TeacherRow { id: number; name: string; employee_number: string | null; status: 'active' | 'gone'; subjects: string | null; streams: number }
 interface Overview {
@@ -130,7 +133,8 @@ const shownTeachers = computed(() => {
     <div class="flex flex-wrap items-center justify-between gap-3 border-b border-line p-4">
       <div>
         <h2 class="font-semibold">Teaching list</h2>
-        <p class="text-sm text-gray-600">Pick the teacher of each subject in each stream. Students rate the teachers listed for them.</p>
+        <p class="text-sm text-gray-600">The teacher of each subject in each stream is already picked for students. Where nobody is listed, students choose their teacher from the department.</p>
+        <p v-if="!session.isSuper" class="mt-1 text-xs font-medium text-gold-700">Only a super admin can change this list.</p>
       </div>
       <p v-if="overview" class="chip" :class="overview.gaps ? 'bg-gold-100 text-gold-700' : 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300'">
         {{ overview.gaps ? `${overview.gaps} still need a teacher (whole school)` : 'Complete' }}
@@ -179,7 +183,7 @@ const shownTeachers = computed(() => {
                   <select
                     class="input w-40 px-2 py-1 text-xs"
                     :value="current(sub.cells[st.stream])"
-                    :disabled="saving === `${sub.id}|${st.stream}`"
+                    :disabled="!session.isSuper || saving === `${sub.id}|${st.stream}`"
                     :aria-label="`${sub.name} teacher for ${klass} ${st.stream}`"
                     @change="setCell(sub.id, st.stream, ($event.target as HTMLSelectElement).value)"
                   >
@@ -199,7 +203,7 @@ const shownTeachers = computed(() => {
                 </div>
               </td>
               <td class="px-3 py-1.5 align-top">
-                <select class="input w-44 px-2 py-1 text-xs" value="" @change="fillClass(sub.id, ($event.target as HTMLSelectElement).value); ($event.target as HTMLSelectElement).value = ''">
+                <select class="input w-44 px-2 py-1 text-xs" value="" :disabled="!session.isSuper" @change="fillClass(sub.id, ($event.target as HTMLSelectElement).value); ($event.target as HTMLSelectElement).value = ''">
                   <option value="">Choose…</option>
                   <option v-for="t in sub.teachers" :key="t.id" :value="t.id">{{ t.name }}</option>
                 </select>

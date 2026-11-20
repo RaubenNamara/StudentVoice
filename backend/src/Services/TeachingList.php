@@ -13,15 +13,36 @@ use PDO;
  * list that Tusome has nobody in the stream taking (an elective Tusome doesn't record: the whole
  * stream rates it, and "Not my teacher" covers anyone who doesn't take it).
  * For each subject, their own teacher where Tusome records one, else the teacher(s) of that
- * subject in their class and stream on the Teaching list.
+ * subject in their class and stream on the Teaching list; with nobody listed, the student picks
+ * their teacher from the subject's department.
  */
 final class TeachingList
 {
-    /** [[teacher_id, subject_id], ...] for one student, in subject order */
-    public static function targets(PDO $db, array $student): array
+    /**
+     * One student's subjects in order: subject id => the teacher ids listed for them (empty when
+     * nobody is listed yet: the student picks their teacher from the department)
+     */
+    public static function subjectsFor(PDO $db, array $student): array
     {
         $all = self::resolve($db, [(int) $student['id'] => $student]);
         return $all[(int) $student['id']] ?? [];
+    }
+
+    /** [[teacher_id, subject_id], ...] listed for one student, in subject order */
+    public static function targets(PDO $db, array $student): array
+    {
+        return self::flatten(self::subjectsFor($db, $student));
+    }
+
+    private static function flatten(array $subjects): array
+    {
+        $list = [];
+        foreach ($subjects as $su => $teachers) {
+            foreach ($teachers as $te) {
+                $list[] = [$te, $su];
+            }
+        }
+        return $list;
     }
 
     /** student id => [[teacher_id, subject_id], ...] for every active student */
@@ -31,7 +52,7 @@ final class TeachingList
         foreach ($db->query("SELECT id, class, stream FROM students WHERE status = 'active'")->fetchAll() as $s) {
             $students[(int) $s['id']] = $s;
         }
-        return self::resolve($db, $students);
+        return array_map([self::class, 'flatten'], self::resolve($db, $students));
     }
 
     private static function resolve(PDO $db, array $students): array
@@ -84,9 +105,7 @@ final class TeachingList
             usort($takes, fn ($a, $b) => ($rank[$a] ?? 0) <=> ($rank[$b] ?? 0));
             $list = [];
             foreach ($takes as $su) {
-                foreach (array_unique($own[$id][$su] ?? $cell[$su] ?? []) as $te) {
-                    $list[] = [$te, $su];
-                }
+                $list[$su] = array_values(array_unique($own[$id][$su] ?? $cell[$su] ?? []));
             }
             $out[$id] = $list;
         }

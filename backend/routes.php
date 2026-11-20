@@ -61,8 +61,8 @@ $router->get('/api/admin/polls/{id}/teachers/{teacher}/{subject}', [TeacherResul
 $router->get('/api/admin/teachers', [TeacherController::class, 'index']);
 $router->post('/api/admin/teachers/sync', [TeacherController::class, 'sync']);
 $router->get('/api/admin/teaching', [TeacherController::class, 'grid']);
-$router->post('/api/admin/teaching', [TeacherController::class, 'setCell']);
-$router->post('/api/admin/teaching/fill-class', [TeacherController::class, 'fillClass']);
+$router->post('/api/admin/teaching', [TeacherController::class, 'setCell'], $super);
+$router->post('/api/admin/teaching/fill-class', [TeacherController::class, 'fillClass'], $super);
 
 // Super admins: the admin accounts
 $router->get('/api/admin/admins', [AdminController::class, 'index'], $super);

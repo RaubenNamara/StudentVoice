@@ -168,7 +168,7 @@ function downloadCsv() {
                 <div class="text-[0.7rem] text-gray-500">average of 5</div>
               </div>
             </div>
-            <p class="mt-1 text-xs text-gray-500">{{ r.answered }} answered<template v-if="r.skipped"> · {{ r.skipped }} skipped</template></p>
+            <p class="mt-1 text-xs text-gray-500">{{ r.answered }} answered<template v-if="r.skipped && !data.poll.sample_size"> · {{ r.skipped }} skipped</template></p>
 
             <!-- scale: one stacked bar, then the five counts -->
             <template v-if="r.question.type === 'scale' && r.counts">

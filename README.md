@@ -79,11 +79,20 @@ once) or about *each teacher* (each student answers once for each of their own t
 Who teaches whom comes from **Tusome** (Teachers → **Sync from Tusome**): its teachers, their
 subjects, and which subjects each student takes. The **Teaching list** (one grid per class: subjects ×
 streams) says who teaches each subject in each stream; a subject with only one teacher is filled in
-automatically, and admins fill the rest (a sync never changes their choices). A student rates, for
-each subject they take, their own teacher where Tusome records one, else the teacher listed for their
-stream. Subjects Tusome doesn't record for a stream (electives) can be added to the grid; then the
-whole stream rates that teacher. A student can tap **Not my teacher**; those counts show per teacher
-so the list can be corrected.
+automatically, and super admins set the rest (a sync never changes their choices; other admins can
+only view it).
+
+What a student does: their subjects show as tiles. They tap one, **choose their teacher from that
+subject's department** (already chosen when the Teaching list or Tusome names one; they can change it),
+then answer **one statement at a time** with big 1-5 buttons that move on by themselves, with the
+optional comments together at the end. "I don't take this subject" closes a subject. Choosing someone
+other than the listed teacher, or not taking the subject, counts as "not my teacher" for the listed
+teacher, so admins can correct the list. A subject with two teachers listed for a stream asks for both.
+
+**Statements per teacher** (poll setting): e.g. 8 of the 20. Each student gets a different mix spread
+across the sections (fixed for that student and subject), so every statement is still answered by many
+students and averages stay fair, while each rating takes about a minute. School polls use the same
+one-question-at-a-time screens.
 
 Teacher results (admins only; teachers have no account and never see them):
 - **Ranking table**: each teacher and subject with ratings / students listed, an overall score,

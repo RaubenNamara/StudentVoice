@@ -12,12 +12,18 @@ use StudentVoice\Http\Response;
 use StudentVoice\Services\TeachingList;
 use StudentVoice\Support\Gate;
 use StudentVoice\Support\Polls;
+use StudentVoice\Support\Sample;
 
 /**
  * The student's side: the polls open to their class, and casting a ballot.
+ *
  * - a school poll: once per student (voters' primary key)
- * - a teacher poll: once per student per teacher and subject (vote_gates fingerprint); a student
- *   may also say "not my teacher", which is counted per teacher without any answers
+ * - a teacher poll: by subject. For each subject the student takes they pick their teacher from
+ *   the subject's department (already picked when the Teaching list names one for their stream)
+ *   and answer the statements once (vote_gates fingerprint per student, teacher and subject).
+ *   A subject with two teachers listed for the stream has two places. "I don't take this
+ *   subject" closes a subject. Choosing someone other than the listed teacher, or not taking the
+ *   subject, is counted as "not my teacher" for the listed teacher, so admins can fix the list.
  */
 final class VoteController
 {
@@ -31,7 +37,6 @@ final class VoteController
              WHERE p.status IN ('open', 'closed') ORDER BY p.status = 'open' DESC, p.opened_at DESC"
         );
         $stmt->execute([$student['id']]);
-        $targets = null;
         $out = [];
         foreach ($stmt->fetchAll() as $row) {
             $p = Polls::shape($row);
@@ -45,15 +50,15 @@ final class VoteController
                 'about' => $p['about'],
                 'closes_at' => $p['closes_at'],
                 'accepting' => $p['accepting'],
-                'questions' => (int) $row['questions'],
+                'questions' => $p['about'] === 'teachers' && $p['sample_size'] ? min((int) $p['sample_size'], (int) $row['questions']) : (int) $row['questions'],
             ];
             if ($p['about'] === 'teachers') {
-                $targets ??= TeachingList::targets($db, $student);
-                $status = $this->statuses($db, $p['id'], (int) $student['id'], $targets);
-                $item['teachers'] = count($targets);
-                $item['handled'] = count(array_filter($status));
-                $item['voted'] = $targets && $item['handled'] === count($targets);
-                if (!$targets || (!$p['accepting'] && !$item['handled'])) {
+                $subjects = $this->subjects($db, $p, $student);
+                $item['teachers'] = array_sum(array_column($subjects, 'places'));
+                $item['handled'] = array_sum(array_column($subjects, 'done'));
+                $item['subjects'] = count($subjects);
+                $item['voted'] = $subjects && $item['handled'] >= $item['teachers'];
+                if (!$subjects || (!$p['accepting'] && !$item['handled'])) {
                     continue;
                 }
             } else {
@@ -69,7 +74,7 @@ final class VoteController
 
     public function poll(Request $r): never
     {
-        [$poll, $student, $targets] = $this->votable((int) $r->param('id'));
+        [$poll, $student, $subjects] = $this->votable((int) $r->param('id'));
         $db = Database::get();
         $out = [
             'id' => $poll['id'],
@@ -80,17 +85,41 @@ final class VoteController
             'questions' => Polls::questions($db, $poll['id']),
         ];
         if ($poll['about'] === 'teachers') {
-            $out['teachers'] = $this->targetList($db, $poll['id'], (int) $student['id'], $targets);
+            $names = $db->query('SELECT id, name FROM teachers')->fetchAll(PDO::FETCH_KEY_PAIR);
+            $people = fn (array $ids) => array_map(fn ($id) => ['id' => $id, 'name' => $names[$id] ?? ''], $ids);
+            $out['subjects'] = array_map(fn ($s) => [
+                'subject_id' => $s['subject_id'],
+                'subject' => $s['subject'],
+                'places' => $s['places'],
+                'done' => $s['done'],
+                'skipped' => $s['skipped'],
+                'assigned' => $people($s['assigned']),
+                'options' => $people($s['options']),
+                'rated' => $s['rated'],
+                'question_ids' => $s['question_ids'],
+            ], $subjects);
         }
         Response::ok($out);
     }
 
     public function submit(Request $r): never
     {
-        [$poll, $student, $targets] = $this->votable((int) $r->param('id'));
+        [$poll, $student, $subjects] = $this->votable((int) $r->param('id'));
         $db = Database::get();
-        [$teacherId, $subjectId] = $this->pickTarget($r, $poll, $targets);
         $questions = Polls::questions($db, $poll['id']);
+        $teacherId = 0;
+        $subjectId = 0;
+        $markNotMine = [];
+        if ($poll['about'] === 'teachers') {
+            [$subject, $teacherId] = $this->pickSubject($r, $subjects, true);
+            $subjectId = $subject['subject_id'];
+            $asked = array_flip($subject['question_ids']);
+            $questions = array_values(array_filter($questions, fn ($q) => isset($asked[$q['id']])));
+            // one place for the subject and they chose someone other than the listed teacher
+            if ($subject['places'] === 1 && $subject['assigned'] && !in_array($teacherId, $subject['assigned'], true)) {
+                $markNotMine = $subject['assigned'];
+            }
+        }
         $given = $r->input('answers', []);
         $given = is_array($given) ? $given : [];
 
@@ -112,7 +141,7 @@ final class VoteController
             Response::error(count($errors) === 1 ? 'One question still needs an answer.' : count($errors) . ' questions still need an answer.', 422, $errors);
         }
 
-        $ok = Database::transaction(function (PDO $db) use ($poll, $student, $rows, $teacherId, $subjectId) {
+        $ok = Database::transaction(function (PDO $db) use ($poll, $student, $rows, $teacherId, $subjectId, $markNotMine) {
             if ($teacherId) {
                 // The gate: one fingerprint per student, teacher and subject - with no student id
                 $gate = $db->prepare('INSERT IGNORE INTO vote_gates (poll_id, gate, teacher_id, subject_id) VALUES (?, ?, ?, ?)');
@@ -120,6 +149,7 @@ final class VoteController
                 if ($gate->rowCount() !== 1) {
                     return false;
                 }
+                $this->markNotMine($db, $poll['id'], (int) $student['id'], $subjectId, $markNotMine);
                 // took part in the poll (turnout only; no teacher here)
                 $db->prepare('INSERT IGNORE INTO voters (poll_id, student_id, class, stream) VALUES (?, ?, ?, ?)')
                     ->execute([$poll['id'], $student['id'], $student['class'], $student['stream']]);
@@ -146,70 +176,121 @@ final class VoteController
         Response::ok(['voted' => true]);
     }
 
-    /** "This is not my teacher": counted for the admins, no answers saved */
+    /** "I don't take this subject": the subject is done; its listed teachers get a "not my teacher" */
     public function skip(Request $r): never
     {
-        [$poll, $student, $targets] = $this->votable((int) $r->param('id'));
+        [$poll, $student, $subjects] = $this->votable((int) $r->param('id'));
         if ($poll['about'] !== 'teachers') {
             Response::error('Only teacher polls have this.', 422);
         }
-        [$teacherId, $subjectId] = $this->pickTarget($r, $poll, $targets);
-        $gate = Database::get()->prepare('INSERT IGNORE INTO vote_gates (poll_id, gate, teacher_id, subject_id, skipped) VALUES (?, ?, ?, ?, 1)');
-        $gate->execute([$poll['id'], Gate::for($poll['id'], (int) $student['id'], $teacherId, $subjectId), $teacherId, $subjectId]);
-        if ($gate->rowCount() !== 1) {
-            Response::error('You have already answered for this teacher.', 409, ['code' => 'already_voted']);
+        [$subject] = $this->pickSubject($r, $subjects, false);
+        if ($subject['rated']) {
+            Response::error('You have already rated a teacher for this subject.', 409);
         }
+        Database::transaction(function (PDO $db) use ($poll, $student, $subject) {
+            $db->prepare('INSERT IGNORE INTO vote_gates (poll_id, gate, teacher_id, subject_id, skipped) VALUES (?, ?, 0, ?, 1)')
+                ->execute([$poll['id'], Gate::for($poll['id'], (int) $student['id'], 0, $subject['subject_id']), $subject['subject_id']]);
+            $this->markNotMine($db, $poll['id'], (int) $student['id'], $subject['subject_id'], $subject['assigned']);
+        });
         Response::ok();
     }
 
-    /** gate key => true for each target this student has already rated or skipped */
-    private function statuses(PDO $db, int $pollId, int $studentId, array $targets): array
+    private function markNotMine(PDO $db, int $pollId, int $studentId, int $subjectId, array $teacherIds): void
     {
-        if (!$targets) {
+        $stmt = $db->prepare('INSERT IGNORE INTO vote_gates (poll_id, gate, teacher_id, subject_id, skipped) VALUES (?, ?, ?, ?, 1)');
+        foreach ($teacherIds as $t) {
+            $stmt->execute([$pollId, Gate::for($pollId, $studentId, (int) $t, $subjectId), $t, $subjectId]);
+        }
+    }
+
+    /**
+     * The student's subjects for a teacher poll, each with: the listed teachers, the teachers they
+     * may choose from, how many teachers they rate (places), which they have rated, and whether
+     * they said they don't take it.
+     */
+    private function subjects(PDO $db, array $poll, array $student): array
+    {
+        $list = TeachingList::subjectsFor($db, $student);
+        if (!$list) {
             return [];
         }
+        $names = $db->query("SELECT id, name FROM subjects")->fetchAll(PDO::FETCH_KEY_PAIR);
+        $dept = [];
+        foreach ($db->query(
+            "SELECT ts.subject_id, t.id FROM teacher_subjects ts JOIN teachers t ON t.id = ts.teacher_id AND t.status = 'active' ORDER BY t.name"
+        )->fetchAll(PDO::FETCH_NUM) as [$s, $t]) {
+            $dept[(int) $s][] = (int) $t;
+        }
+        $questions = Polls::questions($db, $poll['id']);
+        $sid = (int) $student['id'];
+
+        // every fingerprint this student could have in the poll, to look up in one query
         $gates = [];
-        foreach ($targets as [$t, $s]) {
-            $gates[Gate::for($pollId, $studentId, $t, $s)] = "$t|$s";
-        }
-        $in = implode(',', array_fill(0, count($gates), '?'));
-        $stmt = $db->prepare("SELECT gate, skipped FROM vote_gates WHERE poll_id = ? AND gate IN ($in)");
-        $stmt->execute([$pollId, ...array_keys($gates)]);
         $out = [];
-        foreach ($stmt->fetchAll() as $row) {
-            $out[$gates[$row['gate']]] = (int) $row['skipped'] ? 'skipped' : 'done';
+        foreach ($list as $su => $assigned) {
+            $options = array_values(array_unique(array_merge($assigned, $dept[$su] ?? [])));
+            if (!$options) {
+                continue; // a subject with no teachers at all
+            }
+            foreach ([0, ...$options] as $t) {
+                $gates[Gate::for($poll['id'], $sid, $t, $su)] = [$su, $t];
+            }
+            $out[$su] = [
+                'subject_id' => $su,
+                'subject' => $names[$su] ?? '',
+                'assigned' => $assigned,
+                'options' => $options,
+                'places' => max(1, count($assigned)),
+                'rated' => [],
+                'skipped' => false,
+                'done' => 0,
+                'question_ids' => Sample::questionIds($questions, $poll['sample_size'] ? (int) $poll['sample_size'] : null, Gate::for($poll['id'], $sid, 0, $su)),
+            ];
         }
-        return $out;
-    }
-
-    private function targetList(PDO $db, int $pollId, int $studentId, array $targets): array
-    {
-        $status = $this->statuses($db, $pollId, $studentId, $targets);
-        $names = $db->query('SELECT id, name FROM teachers')->fetchAll(PDO::FETCH_KEY_PAIR);
-        $subjects = $db->query('SELECT id, name FROM subjects')->fetchAll(PDO::FETCH_KEY_PAIR);
-        return array_map(fn ($x) => [
-            'teacher_id' => $x[0],
-            'teacher' => $names[$x[0]] ?? '',
-            'subject_id' => $x[1],
-            'subject' => $subjects[$x[1]] ?? '',
-            'status' => $status["{$x[0]}|{$x[1]}"] ?? 'todo',
-        ], $targets);
-    }
-
-    /** For a teacher poll: the teacher and subject asked for, which must be one of this student's */
-    private function pickTarget(Request $r, array $poll, array $targets): array
-    {
-        if ($poll['about'] !== 'teachers') {
-            return [0, 0];
-        }
-        $t = (int) $r->input('teacher_id', 0);
-        $s = (int) $r->input('subject_id', 0);
-        foreach ($targets as [$tt, $ss]) {
-            if ($tt === $t && $ss === $s) {
-                return [$t, $s];
+        if ($gates) {
+            foreach (array_chunk(array_keys($gates), 400) as $chunk) {
+                $stmt = $db->prepare('SELECT gate, skipped FROM vote_gates WHERE poll_id = ? AND gate IN (' . implode(',', array_fill(0, count($chunk), '?')) . ')');
+                $stmt->execute([$poll['id'], ...$chunk]);
+                foreach ($stmt->fetchAll() as $row) {
+                    [$su, $t] = $gates[$row['gate']];
+                    if ($t === 0) {
+                        $out[$su]['skipped'] = true;
+                    } elseif (!(int) $row['skipped']) {
+                        $out[$su]['rated'][] = $t;
+                    }
+                }
             }
         }
-        Response::error('That teacher is not on your list for this poll.', 422);
+        foreach ($out as &$s) {
+            $s['done'] = $s['skipped'] ? $s['places'] : min($s['places'], count($s['rated']));
+        }
+        return array_values($out);
+    }
+
+    /** The subject (and teacher) asked for, which must be open for this student */
+    private function pickSubject(Request $r, array $subjects, bool $withTeacher): array
+    {
+        $s = (int) $r->input('subject_id', 0);
+        foreach ($subjects as $subject) {
+            if ($subject['subject_id'] !== $s) {
+                continue;
+            }
+            if ($subject['done'] >= $subject['places']) {
+                Response::error('You have finished this subject.', 409, ['code' => 'already_voted']);
+            }
+            if (!$withTeacher) {
+                return [$subject, 0];
+            }
+            $t = (int) $r->input('teacher_id', 0);
+            if (!in_array($t, $subject['options'], true)) {
+                Response::error('Choose your teacher from the list.', 422);
+            }
+            if (in_array($t, $subject['rated'], true)) {
+                Response::error('You have already rated this teacher.', 409);
+            }
+            return [$subject, $t];
+        }
+        Response::error('That subject is not on your list for this poll.', 422);
     }
 
     /** @return array{0: ?int, 1: ?string, 2: bool, 3: bool} [number, text, empty, not allowed] */
@@ -242,7 +323,7 @@ final class VoteController
         }
     }
 
-    /** The poll, if this student may vote in it now; for a teacher poll also their teachers */
+    /** The poll, if this student may vote in it now; for a teacher poll also their subjects */
     private function votable(int $id): array
     {
         $student = Auth::student();
@@ -255,15 +336,14 @@ final class VoteController
             Response::error('This poll has closed.', 410);
         }
         if ($poll['about'] === 'teachers') {
-            $targets = TeachingList::targets($db, $student);
-            if (!$targets) {
-                Response::error('No teachers are listed for you yet. Tell the person running the vote.', 404);
+            $subjects = $this->subjects($db, $poll, $student);
+            if (!$subjects) {
+                Response::error('No subjects are listed for you yet. Tell the person running the vote.', 404);
             }
-            $status = $this->statuses($db, $poll['id'], (int) $student['id'], $targets);
-            if (count($status) === count($targets)) {
+            if (array_sum(array_column($subjects, 'done')) >= array_sum(array_column($subjects, 'places'))) {
                 Response::error('You have rated all your teachers in this poll. Thank you!', 409, ['code' => 'already_voted']);
             }
-            return [$poll, $student, $targets];
+            return [$poll, $student, $subjects];
         }
         $voted = $db->prepare('SELECT 1 FROM voters WHERE poll_id = ? AND student_id = ?');
         $voted->execute([$poll['id'], $student['id']]);

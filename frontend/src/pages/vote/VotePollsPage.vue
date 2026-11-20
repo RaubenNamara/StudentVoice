@@ -70,7 +70,7 @@ onMounted(async () => {
           <h2 class="text-lg font-semibold">{{ p.title }}</h2>
           <p v-if="p.intro" class="mt-1 line-clamp-2 text-sm text-gray-600">{{ p.intro }}</p>
           <p class="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-gray-500">
-            <span v-if="p.about === 'teachers'" class="font-medium text-gold-700">{{ p.handled }} of {{ p.teachers }} teachers done · {{ p.questions }} questions each</span>
+            <span v-if="p.about === 'teachers'" class="font-medium text-gold-700">{{ p.handled }} of {{ p.teachers }} teachers done · about a minute each</span>
             <span v-else>{{ p.questions }} questions</span>
             <span v-if="p.closes_at" class="inline-flex items-center gap-1"><ClockIcon class="h-3.5 w-3.5" /> Closes {{ formatDate(p.closes_at) }}</span>
           </p>

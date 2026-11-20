@@ -19,7 +19,7 @@ const route = useRoute()
 const router = useRouter()
 const id = computed(() => Number(route.params.id))
 const poll = ref<PollDetail | null>(null)
-const details = ref({ title: '', intro: '', about: 'school' as 'school' | 'teachers', audience: [] as string[], closes_at: '' })
+const details = ref({ title: '', intro: '', about: 'school' as 'school' | 'teachers', sample_size: 0, audience: [] as string[], closes_at: '' })
 const gaps = ref<number | null>(null)
 const questions = ref<EditQuestion[]>([])
 const saved = ref('')
@@ -29,6 +29,7 @@ const pasting = ref(false)
 const paste = ref({ text: '', type: 'scale' as QuestionType, section: '' })
 let key = 1
 
+const scaleCount = computed(() => questions.value.filter((q) => q.type === 'scale').length)
 const locked = computed(() => (poll.value?.votes ?? 0) > 0)
 const dirty = computed(() => JSON.stringify(strip()) !== saved.value)
 const sections = computed(() => [...new Set(questions.value.map((q) => q.section).filter(Boolean))] as string[])
@@ -40,7 +41,7 @@ function strip() {
 async function load() {
   const p = await api.get<PollDetail>(`/admin/polls/${id.value}`)
   poll.value = p
-  details.value = { title: p.title, intro: p.intro ?? '', about: p.about, audience: p.audience ?? [], closes_at: p.closes_at ? p.closes_at.slice(0, 16).replace(' ', 'T') : '' }
+  details.value = { title: p.title, intro: p.intro ?? '', about: p.about, sample_size: p.sample_size ?? 0, audience: p.audience ?? [], closes_at: p.closes_at ? p.closes_at.slice(0, 16).replace(' ', 'T') : '' }
   gaps.value = p.about === 'teachers' ? (await api.get<{ gaps: number }>('/admin/teachers')).gaps : null
   questions.value = p.questions.map((q) => ({ ...q, options: [...q.options], _k: key++ }))
   saved.value = JSON.stringify(strip())
@@ -231,6 +232,14 @@ async function remove() {
             </button>
           </div>
           <p class="mt-1.5 text-xs text-gray-500">{{ details.about === 'teachers' ? 'Each student answers once for each of their teachers (from the Teaching list).' : 'Each student answers once.' }}</p>
+        </div>
+        <div v-if="details.about === 'teachers'">
+          <label class="label" for="sample">Statements per teacher</label>
+          <select id="sample" v-model.number="details.sample_size" class="input">
+            <option :value="0">All {{ scaleCount }}</option>
+            <option v-for="n in [5, 6, 8, 10, 12]" v-show="n < scaleCount" :key="n" :value="n">{{ n }} (a different mix for each student)</option>
+          </select>
+          <p class="mt-1.5 text-xs text-gray-500">Fewer statements keep it quick. Each student gets a random mix across the sections, so every statement is still answered by many students and the averages stay fair.</p>
         </div>
         <div>
           <span class="label">Who votes</span>

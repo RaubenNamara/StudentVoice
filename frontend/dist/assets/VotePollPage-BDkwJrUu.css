@@ -1,0 +1,1 @@
+.confetti[data-v-adcd368a]{animation:fall-adcd368a 1.6s cubic-bezier(.2,.6,.4,1) both}@keyframes fall-adcd368a{0%{transform:translateY(-20px) rotate(0);opacity:1}to{transform:translate(var(--drift),260px) rotate(var(--turn));opacity:0}}@media (prefers-reduced-motion: reduce){.confetti[data-v-adcd368a]{display:none}}

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { ArrowLeftIcon, CheckIcon } from '@heroicons/vue/24/solid'
+import Face from '@/components/Face.vue'
 import { SCALE, type Question } from '@/types'
 
 /**
@@ -107,6 +108,7 @@ onBeforeUnmount(() => {
   clearTimeout(timer)
 })
 
+const SCALE_FACE = ['text-red-500', 'text-orange-500', 'text-gray-400', 'text-indigo-500', 'text-indigo-700 dark:text-indigo-300']
 const SCALE_TONE = [
   'hover:border-red-300 aria-checked:border-red-600 aria-checked:bg-red-600',
   'hover:border-orange-300 aria-checked:border-orange-500 aria-checked:bg-orange-500',
@@ -121,17 +123,17 @@ const SCALE_TONE = [
     <!-- Progress -->
     <div class="mb-6 flex items-center gap-3">
       <button class="btn-ghost -ml-2 px-2" :class="step === 0 ? 'invisible' : ''" aria-label="Previous question" @click="back"><ArrowLeftIcon class="h-5 w-5" /></button>
-      <div class="h-2 flex-1 overflow-hidden rounded-full bg-gray-100">
-        <div class="h-2 rounded-full bg-gold-400 transition-all duration-300" :style="{ width: `${progress}%` }" />
+      <div class="h-2.5 flex-1 overflow-hidden rounded-full bg-gray-100">
+        <div class="h-2.5 rounded-full bg-gradient-to-r from-gold-400 to-gold-300 transition-all duration-300" :style="{ width: `${progress}%` }" />
       </div>
       <span class="w-14 shrink-0 text-right text-sm tabular-nums text-gray-500">{{ Math.min(step + 1, steps) }} / {{ steps }}</span>
     </div>
 
     <Transition mode="out-in" :enter-from-class="dir === 'next' ? 'translate-x-6 opacity-0' : '-translate-x-6 opacity-0'" enter-active-class="transition duration-200" leave-active-class="transition duration-100" leave-to-class="opacity-0">
       <!-- One tap question -->
-      <div v-if="!isTextStep && current" :key="current.id" class="card p-6 sm:p-8">
-        <p v-if="current.section" class="eyebrow text-gold-600">{{ current.section }}</p>
-        <h2 class="mt-2 text-xl font-semibold leading-snug sm:text-2xl">{{ current.prompt }}</h2>
+      <div v-if="!isTextStep && current" :key="current.id" class="card p-6 shadow-lift sm:p-8">
+        <p v-if="current.section" class="inline-flex rounded-full bg-gold-50 px-2.5 py-0.5 text-xs font-semibold text-gold-700 dark:bg-gold-700/20 dark:text-gold-300">{{ current.section }}</p>
+        <h2 class="mt-3 text-xl font-semibold leading-snug sm:text-2xl">{{ current.prompt }}</h2>
 
         <div v-if="current.type === 'scale'" class="mt-6 grid gap-2 sm:grid-cols-5" role="radiogroup">
           <button
@@ -144,8 +146,9 @@ const SCALE_TONE = [
             :class="SCALE_TONE[k]"
             @click="choose(s.value)"
           >
-            <span class="text-2xl font-semibold leading-none">{{ s.value }}</span>
-            <span class="text-sm font-medium sm:text-xs">{{ s.label }}</span>
+            <Face :value="s.value" class="h-8 w-8 shrink-0 transition group-hover:scale-110 group-aria-checked:text-white sm:h-9 sm:w-9" :class="SCALE_FACE[k]" />
+            <span class="text-base font-semibold sm:text-sm">{{ s.label }}</span>
+            <span class="ml-auto text-sm font-semibold opacity-50 sm:ml-0 sm:text-xs">{{ s.value }}</span>
           </button>
         </div>
 
@@ -200,7 +203,7 @@ const SCALE_TONE = [
       </div>
 
       <!-- Written answers, together on the last card -->
-      <div v-else key="text" class="card p-6 sm:p-8">
+      <div v-else key="text" class="card p-6 shadow-lift sm:p-8">
         <p class="eyebrow text-gold-600">{{ textQuestions[0]?.section || 'Anything to add?' }}</p>
         <h2 class="mt-2 text-xl font-semibold">{{ textQuestions.some((q) => q.required) ? 'A few words from you' : 'Optional - leave empty if you like' }}</h2>
         <div class="mt-5 space-y-4">

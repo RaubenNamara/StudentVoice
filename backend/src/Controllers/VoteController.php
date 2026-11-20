@@ -18,12 +18,12 @@ use StudentVoice\Support\Sample;
  * The student's side: the polls open to their class, and casting a ballot.
  *
  * - a school poll: once per student (voters' primary key)
- * - a teacher poll: by subject. For each subject the student takes they pick their teacher from
- *   the subject's department (already picked when the Teaching list names one for their stream)
- *   and answer the statements once (vote_gates fingerprint per student, teacher and subject).
- *   A subject with two teachers listed for the stream has two places. "I don't take this
- *   subject" closes a subject. Choosing someone other than the listed teacher, or not taking the
- *   subject, is counted as "not my teacher" for the listed teacher, so admins can fix the list.
+ * - a teacher poll: by subject. When the Teaching list (or Tusome) names the student's teacher for
+ *   a subject, they rate that teacher - no choice. With nobody listed, they pick their teacher from
+ *   the subject's department. Each teacher once (vote_gates fingerprint per student, teacher and
+ *   subject); a subject with two teachers listed for the stream asks for both. "I don't take this
+ *   subject" closes a subject and counts as "not my teacher" for any listed teacher, so admins can
+ *   fix the list.
  */
 final class VoteController
 {
@@ -115,10 +115,6 @@ final class VoteController
             $subjectId = $subject['subject_id'];
             $asked = array_flip($subject['question_ids']);
             $questions = array_values(array_filter($questions, fn ($q) => isset($asked[$q['id']])));
-            // one place for the subject and they chose someone other than the listed teacher
-            if ($subject['places'] === 1 && $subject['assigned'] && !in_array($teacherId, $subject['assigned'], true)) {
-                $markNotMine = $subject['assigned'];
-            }
         }
         $given = $r->input('answers', []);
         $given = is_array($given) ? $given : [];
@@ -228,7 +224,8 @@ final class VoteController
         $gates = [];
         $out = [];
         foreach ($list as $su => $assigned) {
-            $options = array_values(array_unique(array_merge($assigned, $dept[$su] ?? [])));
+            // a listed teacher is the only choice; with nobody listed, the department's teachers
+            $options = $assigned ?: array_values(array_unique($dept[$su] ?? []));
             if (!$options) {
                 continue; // a subject with no teachers at all
             }

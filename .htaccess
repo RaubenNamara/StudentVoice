@@ -37,6 +37,10 @@ RewriteRule ^(?!frontend/dist/|backend/public/) frontend/dist/index.html [L]
   <FilesMatch "(favicon\.svg|theme-init\.js)$">
     Header set Cache-Control "public, max-age=86400"
   </FilesMatch>
+  # The crest and campus photo (brand/): rarely change, so a week
+  <FilesMatch "\.(webp|png|jpe?g)$">
+    Header set Cache-Control "public, max-age=604800"
+  </FilesMatch>
 </IfModule>
 
 # Compress text on the way out (the app's script is ~185 KB, ~65 KB compressed): much faster on

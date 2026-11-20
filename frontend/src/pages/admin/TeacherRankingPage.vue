@@ -3,6 +3,7 @@ import { computed, onMounted, ref } from 'vue'
 import { useRoute } from 'vue-router'
 import { ArrowDownTrayIcon, ChevronUpDownIcon, ExclamationTriangleIcon, MagnifyingGlassIcon, PrinterIcon } from '@heroicons/vue/24/outline'
 import PageHeader from '@/components/PageHeader.vue'
+import PrintHeader from '@/components/PrintHeader.vue'
 import StatusChip from '@/components/StatusChip.vue'
 import { api } from '@/api'
 import { percent } from '@/feedback'
@@ -108,6 +109,7 @@ const print = () => window.print()
   </div>
 
   <template v-else>
+    <PrintHeader :title="data.poll.title" subtitle="Teacher results · confidential" />
     <PageHeader :title="data.poll.title" subtitle="Teacher results · for the administration only">
       <template #crumb>
         <RouterLink :to="{ name: 'poll', params: { id: data.poll.id } }" class="no-print text-sm text-gray-500 hover:text-ink">← Poll</RouterLink>

@@ -3,6 +3,7 @@ import { computed, onMounted, ref } from 'vue'
 import { useRoute } from 'vue-router'
 import { EyeSlashIcon, PrinterIcon } from '@heroicons/vue/24/outline'
 import Meter from '@/components/Meter.vue'
+import PrintHeader from '@/components/PrintHeader.vue'
 import { api } from '@/api'
 import { formatDate, percent } from '@/feedback'
 import { fmt, scoreCell, scoreText } from '@/scores'
@@ -64,6 +65,7 @@ const print = () => window.print()
       <button class="btn-secondary" @click="print"><PrinterIcon class="h-4 w-4" /> Print</button>
     </div>
 
+    <PrintHeader title="Teacher report · confidential" :subtitle="r.poll.title" />
     <!-- Heading -->
     <header class="card p-6">
       <p class="eyebrow">Teacher report · confidential, for the administration</p>

@@ -35,10 +35,11 @@ async function logout() {
       :class="open ? 'translate-x-0' : '-translate-x-full'"
     >
       <div class="flex items-center gap-3 px-5 py-5">
-        <BrandMark :size="34" />
+        <div class="rounded-xl bg-white p-1.5 shadow"><BrandMark :size="38" /></div>
         <div class="min-w-0 leading-tight">
+          <div class="text-[0.65rem] font-semibold uppercase leading-tight tracking-wide text-gold-300">{{ session.school }}</div>
           <div class="font-semibold text-white">Student Voice</div>
-          <div class="truncate text-xs text-indigo-300">{{ session.school }}</div>
+          <div class="text-[0.65rem] uppercase tracking-[0.2em] text-crest-300">To be, not to seem</div>
         </div>
         <button class="ml-auto rounded-lg p-1 text-indigo-300 hover:bg-white/10 lg:hidden" aria-label="Close menu" @click="open = false"><XMarkIcon class="h-5 w-5" /></button>
       </div>

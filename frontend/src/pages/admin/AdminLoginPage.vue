@@ -32,9 +32,10 @@ async function submit() {
   <div class="flex min-h-screen items-center justify-center bg-paper px-4 py-10">
     <div class="w-full max-w-sm">
       <div class="mb-6 flex flex-col items-center text-center">
-        <BrandMark :size="48" />
-        <h1 class="mt-4 text-xl font-semibold">Student Voice admin</h1>
-        <p class="mt-1 text-sm text-gray-500">{{ session.school }}</p>
+        <BrandMark :size="76" />
+        <p class="mt-4 text-sm font-semibold uppercase tracking-wide text-indigo-800 dark:text-crest-300">{{ session.school }}</p>
+        <p class="text-[0.7rem] font-semibold uppercase tracking-[0.3em] text-gold-700">To be, not to seem</p>
+        <h1 class="mt-3 text-xl font-semibold">Student Voice · staff</h1>
       </div>
       <form class="card space-y-4 p-6" @submit.prevent="submit">
         <div>

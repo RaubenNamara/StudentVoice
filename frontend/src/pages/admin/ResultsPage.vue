@@ -3,6 +3,7 @@ import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { ArrowDownTrayIcon, EyeSlashIcon, PrinterIcon } from '@heroicons/vue/24/outline'
 import PageHeader from '@/components/PageHeader.vue'
+import PrintHeader from '@/components/PrintHeader.vue'
 import Meter from '@/components/Meter.vue'
 import StatusChip from '@/components/StatusChip.vue'
 import { api } from '@/api'
@@ -92,6 +93,7 @@ function downloadCsv() {
   </div>
 
   <template v-else>
+    <PrintHeader :title="data.poll.title" :subtitle="`Results · ${scope}`" />
     <PageHeader :title="data.poll.title" :subtitle="`Results · ${scope}`">
       <template #crumb>
         <RouterLink :to="{ name: 'poll', params: { id: data.poll.id } }" class="no-print text-sm text-gray-500 hover:text-ink">← Poll</RouterLink>

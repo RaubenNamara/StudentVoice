@@ -2,6 +2,7 @@
 import { computed, onMounted, ref, watch } from 'vue'
 import { PrinterIcon, ScissorsIcon } from '@heroicons/vue/24/outline'
 import BrandMark from '@/components/BrandMark.vue'
+import PrintHeader from '@/components/PrintHeader.vue'
 import { api } from '@/api'
 import { useSession } from '@/stores/session'
 import type { ClassGroup } from '@/types'
@@ -79,10 +80,10 @@ const print = () => window.print()
     <div v-else-if="layout === 'slips'" class="mx-auto grid max-w-5xl grid-cols-2 gap-0 p-4 print:p-0">
       <div v-for="s in slips" :key="s.reg_no" class="slip break-inside-avoid border border-dashed border-gray-300 p-4">
         <div class="flex items-center gap-2">
-          <BrandMark :size="22" />
+          <BrandMark :size="28" />
           <div class="min-w-0 leading-tight">
-            <div class="text-[11px] font-semibold">Student Voice</div>
-            <div class="truncate text-[9px] text-gray-500">{{ session.school }}</div>
+            <div class="truncate text-[10px] font-semibold uppercase tracking-wide text-indigo-900">{{ session.school }}</div>
+            <div class="text-[9px] text-gray-500">Student Voice · voting slip</div>
           </div>
           <ScissorsIcon class="ml-auto h-3.5 w-3.5 text-gray-300" />
         </div>
@@ -95,8 +96,7 @@ const print = () => window.print()
 
     <!-- Class list -->
     <div v-else class="mx-auto max-w-5xl p-4">
-      <h1 class="mb-1 text-lg font-semibold">Voting numbers · {{ pick.class }} {{ pick.stream }}</h1>
-      <p class="mb-3 text-xs text-gray-500">{{ session.school }} · vote at {{ voteUrl }}</p>
+      <PrintHeader always :title="`Voting numbers · ${pick.class} ${pick.stream}`" :subtitle="`vote at ${voteUrl}`" />
       <table class="w-full text-sm">
         <thead class="border-b-2 border-gray-300 text-left text-xs uppercase text-gray-500">
           <tr><th class="py-1.5 pr-2">#</th><th class="py-1.5 pr-2">Name</th><th class="py-1.5 pr-2">Reg. no</th><th class="py-1.5 pr-2">Stream</th><th class="py-1.5">Voting number</th></tr>

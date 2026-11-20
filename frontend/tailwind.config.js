@@ -1,6 +1,10 @@
 /**
- * Student Voice: the Tusome family look - royal blue (Tailwind indigo is the brand blue), gold for
- * highlights, warm cream paper. Green only ever means done / voted.
+ * Student Voice wears St Mark's College Namagoma's colours, taken from the school crest:
+ * - indigo: the crest's deep navy (#1c1464) - every "indigo-*" class is this navy scale
+ * - crest: the crest's sky blue, for light accents
+ * - gold: the motto ribbon and the sun
+ * - red: the cross, used sparingly
+ * Warm cream paper behind. Green only ever means done / voted.
  *
  * Light and dark: the greys, paper, surface, ink and line are CSS variables (src/style.css) that
  * change under `.dark`, so pages follow the theme without dark: variants everywhere.
@@ -28,6 +32,30 @@ export default {
         surface: v('surface'),
         ink: v('ink'),
         line: v('line'),
+        // St Mark's navy (crest #1c1464), replacing Tailwind's indigo so every page follows
+        indigo: {
+          50: '#eef0fb',
+          100: '#dde1f7',
+          200: '#bcc3ee',
+          300: '#8f99df',
+          400: '#6470cd',
+          500: '#4148b4',
+          600: '#2e3299',
+          700: '#232483',
+          800: '#1c1b6c',
+          900: '#18165a',
+          950: '#0f0d3c',
+        },
+        // the crest's sky blue
+        crest: {
+          50: '#eef8fd',
+          100: '#d6eefa',
+          200: '#b0def5',
+          300: '#7cc6ec',
+          400: '#4fb0e2',
+          500: '#2a95cf',
+          600: '#1c77ac',
+        },
         gold: {
           50: '#fdf8e7',
           100: '#faedc0',

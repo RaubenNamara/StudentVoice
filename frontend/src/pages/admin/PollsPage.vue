@@ -1,14 +1,14 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { ChartBarIcon, PlusIcon } from '@heroicons/vue/24/outline'
+import { ChartBarIcon, PencilSquareIcon, PlusIcon, TrashIcon } from '@heroicons/vue/24/outline'
 import PageHeader from '@/components/PageHeader.vue'
 import Modal from '@/components/Modal.vue'
 import Meter from '@/components/Meter.vue'
 import StatusChip from '@/components/StatusChip.vue'
 import AudiencePicker from '@/components/AudiencePicker.vue'
 import { api, ApiError } from '@/api'
-import { formatDate, percent } from '@/feedback'
+import { confirm, formatDate, percent, toast } from '@/feedback'
 import type { PollListItem } from '@/types'
 
 const route = useRoute()
@@ -31,6 +31,27 @@ async function create() {
     error.value = e instanceof ApiError ? e.message : 'Could not create the poll.'
   } finally {
     busy.value = false
+  }
+}
+
+const deleting = ref<number | null>(null)
+
+/** Only a poll nobody has voted in can be deleted (the server checks too); one with votes is closed instead */
+async function remove(p: PollListItem) {
+  if (p.votes) return
+  const body = p.status === 'open'
+    ? 'This poll is open, but nobody has voted yet. The poll and its questions are deleted for good.'
+    : 'The poll and its questions are deleted for good.'
+  if (!(await confirm(`Delete "${p.title}"?`, body, 'Delete', true))) return
+  deleting.value = p.id
+  try {
+    await api.delete(`/admin/polls/${p.id}`)
+    polls.value = (polls.value ?? []).filter((x) => x.id !== p.id)
+    toast('Poll deleted.')
+  } catch (e) {
+    toast(e instanceof ApiError ? e.message : 'Could not delete the poll.', 'error')
+  } finally {
+    deleting.value = null
   }
 }
 
@@ -76,7 +97,20 @@ const audienceText = (a: string[] | null) => (a ? a.join(', ') : 'Every class')
         </div>
         <Meter :value="p.votes" :max="p.eligible" :tone="p.status === 'open' ? 'gold' : 'indigo'" />
       </div>
-      <RouterLink v-if="p.votes" :to="{ name: p.about === 'teachers' ? 'teacher-results' : 'results', params: { id: p.id } }" class="btn-secondary shrink-0"><ChartBarIcon class="h-4 w-4" /> Results</RouterLink>
+      <div class="flex shrink-0 flex-wrap gap-2">
+        <RouterLink v-if="p.votes" :to="{ name: p.about === 'teachers' ? 'teacher-results' : 'results', params: { id: p.id } }" class="btn-secondary flex-1 sm:flex-none"><ChartBarIcon class="h-4 w-4" /> Results</RouterLink>
+        <RouterLink :to="{ name: 'poll', params: { id: p.id } }" class="btn-secondary flex-1 sm:flex-none" :title="p.votes ? 'Students have voted: questions can only be reworded' : 'Edit the poll and its questions'">
+          <PencilSquareIcon class="h-4 w-4" /> Edit
+        </RouterLink>
+        <button
+          class="btn-danger flex-1 sm:flex-none"
+          :disabled="!!p.votes || deleting === p.id"
+          :title="p.votes ? 'Students have voted in this poll, so it cannot be deleted. Close it instead.' : 'Delete this poll'"
+          @click="remove(p)"
+        >
+          <TrashIcon class="h-4 w-4" /> {{ deleting === p.id ? 'Deleting…' : 'Delete' }}
+        </button>
+      </div>
     </div>
   </div>
 

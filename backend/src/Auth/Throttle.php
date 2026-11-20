@@ -8,13 +8,20 @@ use StudentVoice\Database;
 use StudentVoice\Http\Response;
 
 /**
- * Slows guessing of passwords and voting numbers from one connection. Generous, because a whole
- * school lab can share one internet address; a voting number has 32^8 possibilities, so even the
- * full allowance never gets close to guessing one. If the table is missing it steps aside.
+ * Slows guessing of passwords and voting numbers from one connection. If the table is missing it
+ * steps aside.
+ *
+ * Students: very generous, because the whole school (5,000 learners) can reach the site through
+ * one internet address, and on a voting day dozens of mistyped slips in ten minutes are normal; a
+ * lower limit would lock every learner out at once. A voting number has 32^8 (about 10^12)
+ * possibilities, so even 400 wrong tries every ten minutes, all day, has about a 1 in 4,000 chance
+ * of ever hitting one of the school's numbers.
+ * Admins: strict, since a password is far easier to guess than a voting number.
  */
 final class Throttle
 {
-    private const MAX_FAILURES = 40;
+    private const MAX_FAILURES = ['student' => 400, 'admin' => 40];
+    private const DEFAULT_MAX = 40;
     private const WINDOW_MINUTES = 10;
 
     public static function check(string $kind): void
@@ -27,7 +34,7 @@ final class Throttle
             error_log('[studentvoice] login throttle unavailable: ' . $e->getMessage());
             return;
         }
-        if ($row && $row['recent'] && (int) $row['failures'] >= self::MAX_FAILURES) {
+        if ($row && $row['recent'] && (int) $row['failures'] >= (self::MAX_FAILURES[$kind] ?? self::DEFAULT_MAX)) {
             Response::error('Too many wrong tries from this connection. Please wait ' . self::WINDOW_MINUTES . ' minutes and try again.', 429);
         }
     }

@@ -131,6 +131,18 @@ temporary password shown once, which must be replaced at first sign-in.
 
 ## Deploying (cPanel)
 
+**Live:** https://studentvoice.stmark.sc.ug on server1, folder `~/public_html/studentvoice`, cPanel Git
+Version Control "Student Voice" (clone at `~/repositories/StudentVoice`). To release: push to GitHub,
+then in cPanel **Update from Remote** and **Deploy HEAD Commit**. `.cpanel.yml` runs
+`deploy/deploy.sh`, which builds the frontend for the subdomain, backs up the database to
+`~/private_backups`, copies the app while keeping the server's own files (`backend/.env`,
+`backend/storage/`, cPanel's PHP block in `.htaccess`, saved as
+`~/private_backups/studentvoice.htaccess.cpanel-orig`) and runs the migrations. Over SSH:
+`bash ~/repositories/StudentVoice/deploy/deploy.sh`. The committed `frontend/dist` is the local
+(`/studentvoice/`) build and is never copied to live.
+
+A first setup on a new server:
+
 1. Create the MySQL database and user in cPanel; put them in `backend/.env` on the server with
    `APP_ENV=production` and `APP_DEBUG=false`.
 2. `php backend/bin/migrate.php`, then `php backend/bin/create-admin.php ...`.

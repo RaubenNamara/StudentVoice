@@ -1,0 +1,8 @@
+# cPanel Git Version Control: "Deploy HEAD Commit" runs these tasks on the live server
+# (https://studentvoice.stmark.sc.ug). The script builds the frontend, backs up the database,
+# copies the app while keeping the server's own files, and runs the migrations. cPanel has already
+# pulled ("Update from Remote"), so the script does not pull again.
+---
+deployment:
+  tasks:
+    - /bin/bash "$HOME/repositories/StudentVoice/deploy/deploy.sh"

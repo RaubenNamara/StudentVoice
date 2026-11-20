@@ -33,6 +33,13 @@ final class Auth
         }
         if (is_dir($dir) && is_writable($dir)) {
             session_save_path($dir);
+            // Our own folder, so the host's session cleanup never reaches it (cPanel ships with
+            // gc_probability = 0). Clear files idle longer than any sign-in can last on about 1 in
+            // 200 requests: thousands of students signing in would otherwise leave a file each, forever.
+            $idle = max((int) Config::get('SESSION_IDLE_MINUTES', 30), (int) Config::get('STUDENT_IDLE_MINUTES', 15));
+            ini_set('session.gc_maxlifetime', (string) max(3600, ($idle + 30) * 60));
+            ini_set('session.gc_probability', '1');
+            ini_set('session.gc_divisor', '200');
         }
         session_name('studentvoice_session');
         session_set_cookie_params([

@@ -51,6 +51,11 @@ router.beforeEach(async (to) => {
     // the server is unreachable: let the page show its own error
   }
   if (to.meta.needs === 'student' && !session.student) {
+    // students sign in only through Tusome: send them there instead of the voting-number page
+    if (session.tusomeUrl && !session.votingNumbers) {
+      window.location.href = session.tusomeUrl
+      return false
+    }
     return { name: 'vote-login' }
   }
   if (to.meta.needs === 'admin') {

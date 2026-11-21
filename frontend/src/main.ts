@@ -18,7 +18,9 @@ handleAuthProblems((status, code, url) => {
     router.push({ name: 'change-password' })
   } else if (code === 'student_signed_out' || (status === 401 && url.startsWith('/vote'))) {
     session.student = null
-    router.push({ name: 'vote-login', query: { expired: '1' } })
+    // linked to Tusome: back there to sign in again, not to the voting-number page
+    if (session.exitUrl) window.location.href = session.exitUrl
+    else router.push({ name: 'vote-login', query: { expired: '1' } })
   } else if (status === 401 || code === 'session_expired') {
     session.admin = null
     session.loaded = false

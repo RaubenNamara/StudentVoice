@@ -26,10 +26,11 @@ export const useSession = defineStore('session', {
   getters: {
     isSuper: (s) => s.admin?.role === 'super_admin',
     /**
-     * Where a student goes when they are done: back to Tusome, which signs them out there too and
-     * shows its sign-in page for the next student (shared computers). Empty = Student Voice's own page.
+     * Where a student goes when they are done (or their session ends): back to Tusome whenever the
+     * two are linked, which signs them out there too and shows its sign-in page for the next student
+     * (shared computers). Empty = Student Voice's own voting-number page (not linked to Tusome).
      */
-    exitUrl: (s) => (s.tusomeUrl && (s.student?.via === 'tusome' || !s.votingNumbers) ? `${s.tusomeUrl}/signout` : ''),
+    exitUrl: (s) => (s.tusomeUrl ? `${s.tusomeUrl}/signout` : ''),
   },
   actions: {
     async load(force = false) {

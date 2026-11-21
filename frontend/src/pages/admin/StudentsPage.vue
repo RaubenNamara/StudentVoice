@@ -3,6 +3,7 @@ import { computed, onMounted, ref, watch } from 'vue'
 import { ArrowPathIcon, KeyIcon, MagnifyingGlassIcon, PlusIcon, PrinterIcon } from '@heroicons/vue/24/outline'
 import PageHeader from '@/components/PageHeader.vue'
 import Modal from '@/components/Modal.vue'
+import SignInSettings from '@/components/SignInSettings.vue'
 import { api, ApiError } from '@/api'
 import { confirm, formatDate, toast } from '@/feedback'
 import { CLASSES, type ClassGroup } from '@/types'
@@ -131,6 +132,8 @@ async function resetAll() {
     <RouterLink :to="{ name: 'slips' }" class="btn-secondary"><PrinterIcon class="h-4 w-4" /> Print voting slips</RouterLink>
     <button class="btn-secondary" @click="adding = true"><PlusIcon class="h-4 w-4" /> Add a student</button>
   </PageHeader>
+
+  <SignInSettings v-if="session.isSuper" />
 
   <!-- SMIS -->
   <section class="card mb-6 flex flex-col gap-4 p-5 sm:flex-row sm:items-center">

@@ -129,6 +129,16 @@ Linking Tusome: put the same random key (32+ characters) in Tusome's `backend/.e
 `STUDENT_VOICE_API_KEY` and here as `TUSOME_API_KEY`, and set `TUSOME_TEACHING_API_URL` to Tusome's
 `/api/integrations/student-voice/teaching` address. With no key set, Tusome's feed stays switched off.
 
+
+**Signing in from Tusome (no voting numbers).** With the shared key set (TUSOME_API_KEY here,
+STUDENT_VOICE_API_KEY in Tusome) and Student Voice switched on in Tusome (Admin > Settings: the
+switch and this site's address), learners see a Student Voice button on their Tusome dashboard. It
+opens a new tab already signed in: Tusome sends a signed ticket (admission number, name, class,
+stream; valid 2 minutes, usable once) to /api/vote/tusome, which checks it and signs them in; a
+learner not on the list yet is added from it. TUSOME_SCHOOL is this school's Tusome code (empty for
+the home school). Super admins can switch voting numbers off (Students > How students sign in) so
+Tusome is the only way in.
+
 **Admins.** Super admins manage the admin list (Admins page). New admins and password resets get a
 temporary password shown once, which must be replaced at first sign-in.
 

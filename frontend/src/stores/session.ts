@@ -4,6 +4,8 @@ import type { Admin, Student } from '@/types'
 
 interface Me {
   school: string
+  voting_numbers: boolean
+  tusome_url: string
   csrf: string
   admin: Admin | null
   student: Student | null
@@ -14,6 +16,10 @@ export const useSession = defineStore('session', {
   state: () => ({
     loaded: false,
     school: '',
+    /** students may sign in with a voting number (else only from Tusome) */
+    votingNumbers: true,
+    /** Tusome's address when the two are linked (students can come from their dashboard) */
+    tusomeUrl: '',
     admin: null as Admin | null,
     student: null as Student | null,
   }),
@@ -25,6 +31,8 @@ export const useSession = defineStore('session', {
       if (this.loaded && !force) return
       const me = await api.get<Me>('/me')
       this.school = me.school
+      this.votingNumbers = me.voting_numbers ?? true
+      this.tusomeUrl = me.tusome_url ?? ''
       this.admin = me.admin
       this.student = me.student
       setCsrfToken(me.csrf)

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { EyeSlashIcon, HandRaisedIcon, LockClosedIcon } from '@heroicons/vue/24/outline'
 import BrandMark from '@/components/BrandMark.vue'
@@ -12,6 +12,21 @@ const router = useRouter()
 const route = useRoute()
 const code = ref('')
 const error = ref(route.query.expired ? 'You were signed out after a while without activity. Enter your voting number again.' : '')
+
+/** Sent back from the Tusome link (?tusome=reason): what went wrong, in plain words */
+const TUSOME_PROBLEMS: Record<string, string> = {
+  expired: 'That link from Tusome has expired. Go back to Tusome and tap Student Voice again.',
+  used: 'That link from Tusome was already used. Go back to Tusome and tap Student Voice again.',
+  invalid: "That link didn't come from your school's Tusome. Open Student Voice from your Tusome dashboard.",
+  'not-linked': 'Student Voice is not linked to Tusome yet. Tell the person running the vote.',
+  'other-school': 'This Student Voice is for another school.',
+  'not-listed': "You're not on the Student Voice list yet. Tell the person running the vote.",
+  left: 'Your account is not active in Student Voice. Tell the person running the vote.',
+}
+const tusomeProblem = computed(() => {
+  const r = route.query.tusome
+  return typeof r === 'string' ? TUSOME_PROBLEMS[r] ?? 'Signing in from Tusome did not work. Try again from your Tusome dashboard.' : ''
+})
 const busy = ref(false)
 const input = ref<HTMLInputElement>()
 const campus = import.meta.env.BASE_URL + 'brand/stmark-campus.webp'
@@ -94,7 +109,17 @@ const promises = [
 
     <main class="relative -mt-20 flex flex-1 justify-center px-4 pb-12">
       <div class="w-full max-w-md">
-        <form class="card p-6 shadow-lift sm:p-8" @submit.prevent="submit">
+        <!-- Coming back from Tusome with a problem -->
+        <p v-if="tusomeProblem" class="mb-4 rounded-xl border border-gold-300 bg-gold-50 p-4 text-sm text-gold-700 shadow-card dark:border-gold-700 dark:bg-gold-700/20 dark:text-gold-300" role="alert">{{ tusomeProblem }}</p>
+
+        <!-- Voting numbers switched off: students come from their Tusome dashboard -->
+        <div v-if="!session.votingNumbers" class="card p-6 text-center shadow-lift sm:p-8">
+          <h2 class="text-lg font-semibold">Open Student Voice from Tusome</h2>
+          <p class="mt-2 text-sm text-gray-600">Sign in to Tusome with your usual account, then tap <strong>Student Voice</strong> on your dashboard. It opens here, ready for you.</p>
+          <a v-if="session.tusomeUrl" :href="session.tusomeUrl" class="btn-primary mt-5 w-full py-3.5 text-base">Go to Tusome</a>
+        </div>
+
+        <form v-else class="card p-6 shadow-lift sm:p-8" @submit.prevent="submit">
           <label for="code" class="label">Your voting number</label>
           <input
             id="code"
@@ -116,6 +141,9 @@ const promises = [
           <button type="submit" class="btn-primary mt-5 w-full py-3.5 text-base" :disabled="busy">
             {{ busy ? 'Checking…' : "Let's go" }}
           </button>
+          <p v-if="session.tusomeUrl" class="mt-4 text-center text-xs text-gray-500">
+            Or open Student Voice from your <a :href="session.tusomeUrl" class="font-semibold text-indigo-700 hover:underline dark:text-crest-300">Tusome</a> dashboard - no number needed.
+          </p>
         </form>
 
         <ul class="mt-6 grid grid-cols-3 gap-2">

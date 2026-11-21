@@ -9,6 +9,7 @@ use StudentVoice\Controllers\ResultController;
 use StudentVoice\Controllers\StudentController;
 use StudentVoice\Controllers\TeacherController;
 use StudentVoice\Controllers\TeacherResultController;
+use StudentVoice\Controllers\TusomeSignInController;
 use StudentVoice\Controllers\VoteController;
 use StudentVoice\Http\Router;
 
@@ -22,6 +23,8 @@ $super = ['super' => true];
 $router->get('/api/me', [AuthController::class, 'me'], $public);
 $router->post('/api/admin/login', [AuthController::class, 'adminLogin'], $public);
 $router->post('/api/vote/login', [AuthController::class, 'studentLogin'], $public);
+// From the Tusome student dashboard: a signed one-use ticket signs the learner in
+$router->get('/api/vote/tusome', [TusomeSignInController::class, 'enter'], $public);
 
 // Students voting (signed in with a voting number)
 $router->post('/api/vote/logout', [AuthController::class, 'studentLogout'], $student);
@@ -70,6 +73,8 @@ $router->post('/api/admin/teaching/import/preview', [TeacherController::class, '
 $router->post('/api/admin/teaching/import/apply', [TeacherController::class, 'importApply'], $super);
 
 // Super admins: the admin accounts
+$router->get('/api/admin/sign-in-settings', [TusomeSignInController::class, 'settings'], $super);
+$router->post('/api/admin/sign-in-settings', [TusomeSignInController::class, 'saveSettings'], $super);
 $router->get('/api/admin/admins', [AdminController::class, 'index'], $super);
 $router->post('/api/admin/admins', [AdminController::class, 'store'], $super);
 $router->patch('/api/admin/admins/{id}', [AdminController::class, 'update'], $super);

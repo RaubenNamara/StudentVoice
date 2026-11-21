@@ -19,6 +19,9 @@ final class AuthController
     {
         Response::ok([
             'school' => (string) Config::get('SCHOOL_NAME', "St. Mark's College Namagoma"),
+            // how students get in: voting numbers (if on) and/or from their Tusome dashboard
+            'voting_numbers' => \StudentVoice\Support\Settings::votingNumbers(),
+            'tusome_url' => \StudentVoice\Support\Settings::tusomeLinked() ? \StudentVoice\Support\Settings::tusomeUrl() : '',
             'csrf' => Auth::csrfToken(),
             'admin' => self::adminView(Auth::admin()),
             'student' => Auth::student(),
@@ -115,6 +118,9 @@ final class AuthController
     /** A student signs in with the voting number on their slip */
     public function studentLogin(Request $r): never
     {
+        if (!\StudentVoice\Support\Settings::votingNumbers()) {
+            Response::error('Voting numbers are switched off. Open Student Voice from your Tusome dashboard.', 403, ['code' => 'use_tusome']);
+        }
         Throttle::check('student');
         $code = VoterCode::normalise($r->string('code'));
         if (!VoterCode::complete($code)) {

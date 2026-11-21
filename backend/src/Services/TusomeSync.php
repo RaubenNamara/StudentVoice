@@ -158,15 +158,25 @@ final class TusomeSync
         $this->insertMany('student_teachers', ['student_id', 'subject_id', 'teacher_id'], array_values($rows));
         $studentTeachers = count($rows);
 
-        $auto = $this->autoFill();
+        // teachers from the Excel only: no automatic cells, and teachers the Excel does not name stay hidden
+        $auto = \StudentVoice\Support\Settings::excelTeachersOnly() ? 0 : $this->autoFill();
+        TeachingList::applyTeacherSource($db);
         $db->commit();
 
         $gaps = TeachingList::gapCount($db);
-        $parts = [count($teacherIds) . ' teachers', count($subjectIds) . ' subjects'];
-        $newTeachers && $parts[] = "$newTeachers new teachers";
-        $goneTeachers && $parts[] = "$goneTeachers no longer in Tusome";
-        $message = 'Sync complete: ' . implode(', ', $parts) . ". {$auto} subjects filled in where only one teacher teaches them."
-            . ($gaps ? " {$gaps} subjects still need a teacher on the Teaching list." : ' The Teaching list is complete.');
+        if (\StudentVoice\Support\Settings::excelTeachersOnly()) {
+            // teachers come from the Excel: report what the sync is still for - students' subjects
+            $inUse = (int) $db->query("SELECT COUNT(*) FROM teachers WHERE status = 'active'")->fetchColumn();
+            $message = "Sync complete: students' subjects updated ({$studentSubjects} subject choices). "
+                . "Teachers come from your Excel upload ({$inUse} in use); the Teaching list was not changed."
+                . ($gaps ? " {$gaps} subjects students take still have no teacher on the Teaching list." : '');
+        } else {
+            $parts = [count($teacherIds) . ' teachers', count($subjectIds) . ' subjects'];
+            $newTeachers && $parts[] = "$newTeachers new teachers";
+            $goneTeachers && $parts[] = "$goneTeachers no longer in Tusome";
+            $message = 'Sync complete: ' . implode(', ', $parts) . ". {$auto} subjects filled in where only one teacher teaches them."
+                . ($gaps ? " {$gaps} subjects still need a teacher on the Teaching list." : ' The Teaching list is complete.');
+        }
         return [$message, ['student_subjects' => $studentSubjects, 'student_teachers' => $studentTeachers, 'auto' => $auto, 'gaps' => $gaps]];
     }
 

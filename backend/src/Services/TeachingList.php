@@ -112,6 +112,34 @@ final class TeachingList
         return $out;
     }
 
+    /**
+     * With teachers from the Excel only: a teacher is shown when the Teaching list names them and
+     * hidden ('gone') otherwise - never deleted, so their past ratings keep their names.
+     */
+    public static function applyTeacherSource(PDO $db): void
+    {
+        if (!\StudentVoice\Support\Settings::excelTeachersOnly()) {
+            return;
+        }
+        $db->exec("UPDATE teachers t SET t.status = IF(EXISTS (SELECT 1 FROM teaching x WHERE x.teacher_id = t.id), 'active', 'gone')");
+    }
+
+    /**
+     * subject id => teacher ids who may be chosen for it: with Excel teachers only, those the
+     * Teaching list has for the subject anywhere; otherwise Tusome's department teachers
+     */
+    public static function subjectTeachers(PDO $db): array
+    {
+        $sql = \StudentVoice\Support\Settings::excelTeachersOnly()
+            ? "SELECT DISTINCT x.subject_id, t.id, t.name FROM teaching x JOIN teachers t ON t.id = x.teacher_id AND t.status = 'active' ORDER BY t.name"
+            : "SELECT ts.subject_id, t.id, t.name FROM teacher_subjects ts JOIN teachers t ON t.id = ts.teacher_id AND t.status = 'active' ORDER BY t.name";
+        $out = [];
+        foreach ($db->query($sql)->fetchAll() as $r) {
+            $out[(int) $r['subject_id']][] = ['id' => (int) $r['id'], 'name' => $r['name']];
+        }
+        return $out;
+    }
+
     /** Subjects students take in a stream with no teacher on the list */
     public static function gapCount(PDO $db): int
     {
@@ -152,12 +180,8 @@ final class TeachingList
             $cells[(int) $r['subject_id']][$r['stream']][] = ['teacher_id' => (int) $r['teacher_id'], 'source' => $r['source']];
         }
 
-        $teachersBySubject = [];
-        foreach ($db->query(
-            "SELECT ts.subject_id, t.id, t.name FROM teacher_subjects ts JOIN teachers t ON t.id = ts.teacher_id AND t.status = 'active' ORDER BY t.name"
-        )->fetchAll() as $r) {
-            $teachersBySubject[(int) $r['subject_id']][] = ['id' => (int) $r['id'], 'name' => $r['name']];
-        }
+        // each subject's teachers: from the Excel (Teaching list) or Tusome's departments
+        $teachersBySubject = self::subjectTeachers($db);
 
         $subjects = [];
         $allSubjects = [];

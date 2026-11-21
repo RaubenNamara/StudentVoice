@@ -176,6 +176,7 @@ final class TeachingImport
                 }
             }
             $new = count(array_filter($plan['teachers'], fn ($t) => !$t['match'] && !$t['skip']));
+            TeachingList::applyTeacherSource($db);
             return ['written' => $written, 'new_teachers' => $new, 'gaps' => TeachingList::gapCount($db)];
         });
     }

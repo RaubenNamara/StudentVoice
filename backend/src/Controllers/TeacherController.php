@@ -19,9 +19,13 @@ final class TeacherController
     public function index(Request $r): never
     {
         $db = Database::get();
+        // a teacher's subjects: from the Excel (Teaching list), or Tusome's departments
+        $subjectsSql = \StudentVoice\Support\Settings::excelTeachersOnly()
+            ? "(SELECT GROUP_CONCAT(DISTINCT s.name ORDER BY s.name SEPARATOR ', ') FROM teaching x2 JOIN subjects s ON s.id = x2.subject_id WHERE x2.teacher_id = t.id)"
+            : "(SELECT GROUP_CONCAT(s.name ORDER BY s.name SEPARATOR ', ') FROM teacher_subjects ts JOIN subjects s ON s.id = ts.subject_id WHERE ts.teacher_id = t.id)";
         $teachers = $db->query(
             "SELECT t.id, t.name, t.employee_number, t.status,
-                    (SELECT GROUP_CONCAT(s.name ORDER BY s.name SEPARATOR ', ') FROM teacher_subjects ts JOIN subjects s ON s.id = ts.subject_id WHERE ts.teacher_id = t.id) AS subjects,
+                    $subjectsSql AS subjects,
                     (SELECT COUNT(DISTINCT CONCAT(x.class, '|', x.stream)) FROM teaching x WHERE x.teacher_id = t.id) AS streams
              FROM teachers t ORDER BY t.status = 'active' DESC, t.name"
         )->fetchAll();
@@ -29,6 +33,8 @@ final class TeacherController
             'teachers' => $teachers,
             'sync' => (new TusomeSync($db))->status(),
             'gaps' => TeachingList::gapCount($db),
+            // teachers come only from the Excel upload (others are hidden)
+            'excel_only' => \StudentVoice\Support\Settings::excelTeachersOnly(),
             'subjects' => (int) $db->query("SELECT COUNT(*) FROM subjects WHERE status = 'active'")->fetchColumn(),
         ]);
     }
@@ -81,6 +87,7 @@ final class TeacherController
                 $insert->execute([$class, $stream, $subjectId, $id]);
             }
         });
+        TeachingList::applyTeacherSource($db);
         Response::ok(['gaps' => TeachingList::gapCount($db)]);
     }
 
@@ -175,6 +182,7 @@ final class TeacherController
                 }
             }
         });
+        TeachingList::applyTeacherSource(Database::get());
         Response::ok(['gaps' => TeachingList::gapCount(Database::get())]);
     }
 }

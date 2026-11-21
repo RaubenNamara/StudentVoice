@@ -221,12 +221,9 @@ final class VoteController
             return [];
         }
         $names = $db->query("SELECT id, name FROM subjects")->fetchAll(PDO::FETCH_KEY_PAIR);
-        $dept = [];
-        foreach ($db->query(
-            "SELECT ts.subject_id, t.id FROM teacher_subjects ts JOIN teachers t ON t.id = ts.teacher_id AND t.status = 'active' ORDER BY t.name"
-        )->fetchAll(PDO::FETCH_NUM) as [$s, $t]) {
-            $dept[(int) $s][] = (int) $t;
-        }
+        // who a student may choose for a subject nobody is listed for: that subject's teachers in
+        // the Excel (or Tusome's department, when teachers come from Tusome)
+        $dept = array_map(fn ($list) => array_column($list, 'id'), TeachingList::subjectTeachers($db));
         $questions = Polls::questions($db, $poll['id']);
         $sid = (int) $student['id'];
 

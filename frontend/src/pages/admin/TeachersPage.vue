@@ -14,6 +14,7 @@ const session = useSession()
 
 interface TeacherRow { id: number; name: string; employee_number: string | null; status: 'active' | 'gone'; subjects: string | null; streams: number }
 interface Overview {
+  excel_only?: boolean
   teachers: TeacherRow[]
   sync: { configured: boolean; last: { finished_at: string | null; started_at: string; status: string; message: string | null; started_by_name: string } | null }
   gaps: number
@@ -117,9 +118,14 @@ async function openTeacher(t: TeacherRow) {
   reportsOf.value = await api.get<TeacherReports>(`/admin/teachers/${t.id}/reports`)
 }
 
+/** Hidden teachers (not in the Excel) are listed only on request */
+const showHidden = ref(false)
+const hiddenCount = computed(() => overview.value?.teachers.filter((t) => t.status === 'gone').length ?? 0)
 const shownTeachers = computed(() => {
   const term = q.value.trim().toLowerCase()
-  return (overview.value?.teachers ?? []).filter((t) => !term || t.name.toLowerCase().includes(term) || (t.subjects ?? '').toLowerCase().includes(term))
+  return (overview.value?.teachers ?? [])
+    .filter((t) => showHidden.value || t.status === 'active')
+    .filter((t) => !term || t.name.toLowerCase().includes(term) || (t.subjects ?? '').toLowerCase().includes(term))
 })
 </script>
 
@@ -129,9 +135,10 @@ const shownTeachers = computed(() => {
   <!-- Tusome -->
   <section class="card mb-6 flex flex-col gap-4 p-5 sm:flex-row sm:items-center">
     <div class="min-w-0 flex-1">
-      <h2 class="font-semibold">Teachers from Tusome</h2>
+      <h2 class="font-semibold">{{ overview?.excel_only ? "Subjects students take, from Tusome" : "Teachers from Tusome" }}</h2>
       <p class="mt-1 text-sm text-gray-600">
-        Brings in Tusome's teachers, their subjects, and which subjects each student takes. A subject with only one teacher is filled in for you; your choices below are never changed by a sync.
+        <template v-if="overview?.excel_only">Brings in which subjects each student takes (so they rate the right teachers). <strong>Teachers come only from your Excel upload</strong>: Tusome teachers the Excel doesn't name stay hidden, and a sync never changes the Teaching list.</template>
+        <template v-else>Brings in Tusome's teachers, their subjects, and which subjects each student takes. A subject with only one teacher is filled in for you; your choices below are never changed by a sync.</template>
       </p>
       <p v-if="overview && !overview.sync.configured" class="mt-2 text-sm text-red-700 dark:text-red-400">The link to Tusome is not set up yet (TUSOME_TEACHING_API_URL and TUSOME_API_KEY in backend/.env).</p>
       <p v-else-if="overview?.sync.last" class="mt-2 text-xs" :class="overview.sync.last.status === 'failed' ? 'text-red-700 dark:text-red-400' : 'text-gray-500'">
@@ -150,7 +157,7 @@ const shownTeachers = computed(() => {
     <div class="flex flex-wrap items-center justify-between gap-3 border-b border-line p-4">
       <div>
         <h2 class="font-semibold">Teaching list</h2>
-        <p class="text-sm text-gray-600">The teacher of each subject in each stream is already picked for students. Where nobody is listed, students choose their teacher from the department.</p>
+        <p class="text-sm text-gray-600">The teacher of each subject in each stream is already picked for students. Where nobody is listed, students choose from {{ overview?.excel_only ? "that subject's teachers in the Excel" : 'the department' }}.</p>
         <p v-if="!session.isSuper" class="mt-1 text-xs font-medium text-gold-700">Only a super admin can change this list.</p>
       </div>
       <p v-if="overview" class="chip" :class="overview.gaps ? 'bg-gold-100 text-gold-700' : 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300'">
@@ -190,7 +197,7 @@ const shownTeachers = computed(() => {
             <tr v-for="sub in grid.subjects" :key="sub.id">
               <td class="sticky left-0 z-10 bg-surface px-3 py-2 font-semibold">
                 {{ sub.name }}
-                <div class="text-xs font-normal text-gray-500">{{ sub.teachers.length }} teacher{{ sub.teachers.length === 1 ? '' : 's' }} in Tusome</div>
+                <div class="text-xs font-normal text-gray-500">{{ sub.teachers.length }} teacher{{ sub.teachers.length === 1 ? '' : 's' }} in {{ overview?.excel_only ? 'the Excel' : 'Tusome' }}</div>
               </td>
               <td v-for="st in grid.streams" :key="st.stream" class="px-1.5 py-1.5 align-top">
                 <div
@@ -245,7 +252,8 @@ const shownTeachers = computed(() => {
   <!-- All teachers -->
   <section class="card mt-6 overflow-hidden">
     <div class="flex flex-wrap items-center justify-between gap-3 border-b border-line p-4">
-      <h2 class="font-semibold">All teachers <span class="font-normal text-gray-500">({{ overview?.teachers.filter((t) => t.status === 'active').length ?? 0 }})</span></h2>
+      <h2 class="font-semibold">{{ overview?.excel_only ? 'Teachers in the Excel' : 'All teachers' }} <span class="font-normal text-gray-500">({{ overview?.teachers.filter((t) => t.status === 'active').length ?? 0 }})</span></h2>
+      <label v-if="hiddenCount" class="flex items-center gap-2 text-sm text-gray-600"><input v-model="showHidden" type="checkbox" class="rounded" /> Show {{ hiddenCount }} hidden</label>
       <div class="relative w-64">
         <MagnifyingGlassIcon class="pointer-events-none absolute left-3 top-2.5 h-4 w-4 text-gray-400" />
         <input v-model="q" class="input pl-9" placeholder="Name or subject" />
@@ -253,10 +261,10 @@ const shownTeachers = computed(() => {
     </div>
     <div class="max-h-[28rem] overflow-y-auto">
       <table class="w-full text-sm">
-        <thead class="table-head sticky top-0"><tr><th class="px-4 py-2">Teacher</th><th class="px-4 py-2">Subjects (Tusome)</th><th class="px-4 py-2 text-right">Streams on the list</th></tr></thead>
+        <thead class="table-head sticky top-0"><tr><th class="px-4 py-2">Teacher</th><th class="px-4 py-2">Subjects</th><th class="px-4 py-2 text-right">Streams on the list</th></tr></thead>
         <tbody class="divide-y divide-line">
           <tr v-for="t in shownTeachers" :key="t.id" :class="t.status === 'gone' ? 'opacity-50' : ''">
-            <td class="px-4 py-2"><button class="text-left font-medium text-indigo-800 hover:underline dark:text-indigo-300" @click="openTeacher(t)">{{ t.name }}</button><div class="text-xs text-gray-500">{{ t.employee_number }}<template v-if="t.status === 'gone'"> · no longer in Tusome</template></div></td>
+            <td class="px-4 py-2"><button class="text-left font-medium text-indigo-800 hover:underline dark:text-indigo-300" @click="openTeacher(t)">{{ t.name }}</button><div class="text-xs text-gray-500">{{ t.employee_number }}<template v-if="t.status === 'gone'"> · {{ overview?.excel_only ? 'not in the Excel (hidden)' : 'no longer in Tusome' }}</template></div></td>
             <td class="px-4 py-2 text-gray-600">{{ t.subjects ?? '—' }}</td>
             <td class="px-4 py-2 text-right tabular-nums">{{ t.streams }}</td>
           </tr>

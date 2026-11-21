@@ -34,6 +34,12 @@ final class Settings
         return self::get('voting_numbers', '1') === '1';
     }
 
+    /** Teachers come only from the Excel upload (the Teaching list), not every teacher Tusome has */
+    public static function excelTeachersOnly(): bool
+    {
+        return self::get('teachers_source', 'excel') === 'excel';
+    }
+
     /** The key shared with Tusome is set (it signs both the teaching feed and sign-in tickets) */
     public static function tusomeLinked(): bool
     {

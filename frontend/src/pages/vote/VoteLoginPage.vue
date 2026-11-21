@@ -28,7 +28,9 @@ onMounted(() => {
  */
 const LENGTH = 6
 const clean = (v: string) => v.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, LENGTH)
-const withDash = (raw: string) => (raw.length > 3 ? `${raw.slice(0, 3)}-${raw.slice(3)}` : raw)
+/** The dash appears as soon as the 3rd character is in (unless they are deleting back to it) */
+const withDash = (raw: string, deleting = false) =>
+  raw.length > 3 || (raw.length === 3 && !deleting) ? `${raw.slice(0, 3)}-${raw.slice(3)}` : raw
 
 /** Typed characters that aren't letters or numbers never reach the box (pastes are cleaned after) */
 function onBeforeInput(e: InputEvent) {
@@ -37,7 +39,9 @@ function onBeforeInput(e: InputEvent) {
 
 function onInput(e: Event) {
   const el = e.target as HTMLInputElement
-  code.value = withDash(clean(el.value))
+  // Backspace over the dash takes it away instead of the dash coming straight back
+  const deleting = (e as InputEvent).inputType?.startsWith('delete') ?? false
+  code.value = withDash(clean(el.value), deleting)
   // write it back even when nothing changed (Vue wouldn't), so a refused character never lingers
   el.value = code.value
   el.setSelectionRange(el.value.length, el.value.length)

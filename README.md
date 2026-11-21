@@ -47,8 +47,11 @@ legacy/                 the first plain-PHP version (not served; kept for refere
 ## How it works
 
 **Students and voting numbers.** Students come from the school's SMIS (the same API Tusome syncs
-from: RegNo, Name, Class, Stream). Each new student gets a random voting number like `K7PM-4QXT`
-(no 0/O or 1/I/L, so it can be read aloud). It is random, not the RegNo, so classmates who know each
+from: RegNo, Name, Class, Stream). Each new student gets a random 6-character voting number like `K7P-4QX`
+(letters and digits mixed; no 0/O or 1/I/L, so it can be read aloud). Students just type the six
+letters and numbers: capitals, the dash and refusing anything else are automatic. A super admin can
+give everyone new numbers at once (Students > New numbers for everyone, or
+`php backend/bin/new-voting-numbers.php --yes`); old slips then stop working, votes already cast stay. It is random, not the RegNo, so classmates who know each
 other's RegNo can't vote for each other. A sync never changes a voting number; students no longer in
 SMIS can't vote; a student who returns keeps their number. Students not yet in SMIS can be added by
 hand. **Print voting slips** gives cut-out slips (10 per A4 page) or a class list for each class

@@ -21,16 +21,33 @@ onMounted(() => {
   input.value?.focus()
 })
 
-/** Shown as XXXX-XXXX while typing, whatever the student types between */
+/**
+ * The voting number box: 6 letters and numbers shown as XXX-XXX. Letters become capitals whatever
+ * the keyboard says, the dash puts itself in, and anything else (spaces, dashes, symbols) is
+ * refused before it shows. Pasting "k7p 4qx" or "K7P-4QX" ends up the same.
+ */
+const LENGTH = 6
+const clean = (v: string) => v.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, LENGTH)
+const withDash = (raw: string) => (raw.length > 3 ? `${raw.slice(0, 3)}-${raw.slice(3)}` : raw)
+
+/** Typed characters that aren't letters or numbers never reach the box (pastes are cleaned after) */
+function onBeforeInput(e: InputEvent) {
+  if (e.inputType === 'insertText' && e.data && /[^A-Za-z0-9]/.test(e.data)) e.preventDefault()
+}
+
 function onInput(e: Event) {
-  const raw = (e.target as HTMLInputElement).value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 8)
-  code.value = raw.length > 4 ? `${raw.slice(0, 4)}-${raw.slice(4)}` : raw
+  const el = e.target as HTMLInputElement
+  code.value = withDash(clean(el.value))
+  // write it back even when nothing changed (Vue wouldn't), so a refused character never lingers
+  el.value = code.value
+  el.setSelectionRange(el.value.length, el.value.length)
+  if (error.value) error.value = ''
 }
 
 async function submit() {
   error.value = ''
-  if (code.value.replace('-', '').length !== 8) {
-    error.value = 'Your voting number has 8 letters and numbers. Check your slip.'
+  if (clean(code.value).length !== LENGTH) {
+    error.value = 'Your voting number has 6 letters and numbers, like K7P-4QX. Check your slip.'
     return
   }
   busy.value = true
@@ -79,12 +96,15 @@ const promises = [
             id="code"
             ref="input"
             :value="code"
-            class="input py-3.5 text-center font-mono text-2xl tracking-[0.3em] uppercase"
-            placeholder="XXXX-XXXX"
+            class="input py-3.5 text-center font-mono text-3xl tracking-[0.3em] uppercase"
+            placeholder="XXX-XXX"
             autocomplete="off"
             autocapitalize="characters"
+            autocorrect="off"
             spellcheck="false"
-            maxlength="9"
+            inputmode="text"
+            enterkeyhint="go"
+            @beforeinput="onBeforeInput"
             @input="onInput"
           />
           <p class="mt-1.5 text-xs text-gray-500">It's on the slip from your class teacher.</p>

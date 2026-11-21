@@ -120,6 +120,36 @@ final class StudentController
         Response::ok(['voter_code' => $code]);
     }
 
+    /**
+     * Every student (active or not) gets a new voting number at once; the old numbers and printed
+     * slips stop working. Votes already cast still count, and nobody can vote twice, because that
+     * is tied to the student, not the number. Super admins, with the confirmation typed.
+     */
+    public function newCodesForAll(Request $r): never
+    {
+        if (strtoupper($r->string('confirm')) !== 'NEW NUMBERS') {
+            Response::error('Type NEW NUMBERS to confirm.', 422);
+        }
+        @set_time_limit(300);
+        Response::ok(['students' => self::resetAllCodes(Database::get())]);
+    }
+
+    /** @return int students given a new number */
+    public static function resetAllCodes(\PDO $db): int
+    {
+        return Database::transaction(function (\PDO $db) {
+            $ids = $db->query('SELECT id FROM students ORDER BY id')->fetchAll(\PDO::FETCH_COLUMN);
+            // park the old numbers first, so a new number can never clash with one not yet replaced
+            $db->exec("UPDATE students SET voter_code = CONCAT('~', id)");
+            $codes = VoterCode::many(count($ids));
+            $set = $db->prepare('UPDATE students SET voter_code = ? WHERE id = ?');
+            foreach ($ids as $i => $id) {
+                $set->execute([$codes[$i], (int) $id]);
+            }
+            return count($ids);
+        });
+    }
+
     /** Only for students added by hand; SMIS students follow SMIS */
     public function setStatus(Request $r): never
     {

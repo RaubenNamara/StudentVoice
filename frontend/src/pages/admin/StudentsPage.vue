@@ -1,11 +1,12 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
-import { ArrowPathIcon, MagnifyingGlassIcon, PlusIcon, PrinterIcon } from '@heroicons/vue/24/outline'
+import { ArrowPathIcon, KeyIcon, MagnifyingGlassIcon, PlusIcon, PrinterIcon } from '@heroicons/vue/24/outline'
 import PageHeader from '@/components/PageHeader.vue'
 import Modal from '@/components/Modal.vue'
 import { api, ApiError } from '@/api'
 import { confirm, formatDate, toast } from '@/feedback'
 import { CLASSES, type ClassGroup } from '@/types'
+import { useSession } from '@/stores/session'
 
 interface Row {
   id: number
@@ -101,10 +102,32 @@ async function setStatus(s: Row, status: 'active' | 'left') {
 }
 
 const lastRun = computed(() => sync.value.runs[0])
+
+/** Super admins: every student gets a new voting number (old slips stop working) */
+const session = useSession()
+const resetting = ref(false)
+const resetConfirm = ref('')
+const resetBusy = ref(false)
+async function resetAll() {
+  resetBusy.value = true
+  try {
+    const r = await api.post<{ students: number }>('/admin/students/new-codes', { confirm: resetConfirm.value })
+    toast(`${r.students.toLocaleString()} students have new voting numbers. Print the new slips.`)
+    resetting.value = false
+    resetConfirm.value = ''
+    shown.value = {}
+    await loadAll()
+  } catch (e) {
+    toast(e instanceof ApiError ? e.message : 'Could not give new numbers.', 'error')
+  } finally {
+    resetBusy.value = false
+  }
+}
 </script>
 
 <template>
   <PageHeader title="Students" :subtitle="`${total.toLocaleString()} students can vote. Each has their own voting number.`">
+    <button v-if="session.isSuper" class="btn-secondary" @click="resetting = true"><KeyIcon class="h-4 w-4" /> New numbers for everyone</button>
     <RouterLink :to="{ name: 'slips' }" class="btn-secondary"><PrinterIcon class="h-4 w-4" /> Print voting slips</RouterLink>
     <button class="btn-secondary" @click="adding = true"><PlusIcon class="h-4 w-4" /> Add a student</button>
   </PageHeader>
@@ -234,5 +257,22 @@ const lastRun = computed(() => sync.value.runs[0])
         <button class="btn-primary">Add student</button>
       </div>
     </form>
+  </Modal>
+  <Modal v-if="resetting" title="New voting numbers for everyone" @close="resetting = false">
+    <div class="space-y-3 text-sm text-gray-700">
+      <p>Every student gets a <strong>new 6-character voting number</strong> (like K7P-4QX).</p>
+      <ul class="list-disc space-y-1 pl-5">
+        <li>The old numbers and every printed slip <strong>stop working at once</strong> - print and hand out new slips.</li>
+        <li>Votes already cast still count, and nobody can vote twice.</li>
+      </ul>
+      <label class="label mt-4" for="rc">Type <span class="font-mono">NEW NUMBERS</span> to confirm</label>
+      <input id="rc" v-model="resetConfirm" class="input font-mono uppercase" autocomplete="off" />
+    </div>
+    <div class="mt-5 flex justify-end gap-2">
+      <button class="btn-secondary" @click="resetting = false">Cancel</button>
+      <button class="btn bg-red-700 text-white hover:bg-red-800" :disabled="resetBusy || resetConfirm.trim().toUpperCase() !== 'NEW NUMBERS'" @click="resetAll">
+        {{ resetBusy ? 'Giving new numbers…' : 'Give everyone new numbers' }}
+      </button>
+    </div>
   </Modal>
 </template>

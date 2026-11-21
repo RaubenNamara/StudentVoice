@@ -117,8 +117,8 @@ final class AuthController
     {
         Throttle::check('student');
         $code = VoterCode::normalise($r->string('code'));
-        if (strlen($code) !== 9) {
-            Response::error('A voting number has 8 letters and numbers, like K7PM-4QXT.', 422);
+        if (!VoterCode::complete($code)) {
+            Response::error('A voting number has 6 letters and numbers, like K7P-4QX.', 422);
         }
         $stmt = Database::get()->prepare('SELECT id, status FROM students WHERE voter_code = ?');
         $stmt->execute([$code]);

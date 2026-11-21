@@ -41,6 +41,7 @@ $router->get('/api/admin/students/classes', [StudentController::class, 'classes'
 $router->get('/api/admin/students/slips', [StudentController::class, 'slips']);
 $router->get('/api/admin/students/sync', [StudentController::class, 'syncStatus']);
 $router->post('/api/admin/students/sync', [StudentController::class, 'sync']);
+$router->post('/api/admin/students/new-codes', [StudentController::class, 'newCodesForAll'], $super);
 $router->patch('/api/admin/students/{id}', [StudentController::class, 'update']);
 $router->post('/api/admin/students/{id}/new-code', [StudentController::class, 'newCode']);
 $router->post('/api/admin/students/{id}/status', [StudentController::class, 'setStatus']);

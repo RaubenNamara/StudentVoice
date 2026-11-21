@@ -86,7 +86,7 @@ final class TusomeSignInController
         if ($student['status'] !== 'active') {
             return 'left';
         }
-        Auth::loginStudent((int) $student['id']);
+        Auth::loginStudent((int) $student['id'], 'tusome');
         return null;
     }
 

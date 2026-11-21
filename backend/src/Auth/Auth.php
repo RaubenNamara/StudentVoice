@@ -101,6 +101,8 @@ final class Auth
                 $stmt->execute([$_SESSION['student_id']]);
                 $row = $stmt->fetch();
                 if ($row) {
+                    // came in from Tusome (signed in there): when they finish, they go back to Tusome
+                    $row['via'] = ($_SESSION['student_via'] ?? '') === 'tusome' ? 'tusome' : 'code';
                     self::$student = $row;
                 } else {
                     unset($_SESSION['student_id']);
@@ -120,10 +122,11 @@ final class Auth
         self::$admin = null;
     }
 
-    public static function loginStudent(int $studentId): void
+    public static function loginStudent(int $studentId, string $via = 'code'): void
     {
         session_regenerate_id(true);
         $_SESSION['student_id'] = $studentId;
+        $_SESSION['student_via'] = $via;
         $_SESSION['student_seen'] = time();
         $_SESSION['csrf'] ??= bin2hex(random_bytes(32));
         self::$student = null;
@@ -137,7 +140,7 @@ final class Auth
 
     public static function logoutStudent(): void
     {
-        unset($_SESSION['student_id'], $_SESSION['student_seen']);
+        unset($_SESSION['student_id'], $_SESSION['student_seen'], $_SESSION['student_via']);
         self::$student = false;
     }
 

@@ -9,8 +9,8 @@ const session = useSession()
 const router = useRouter()
 
 async function done() {
-  await session.studentLogout()
-  router.push({ name: 'vote-login' })
+  // from Tusome: back to Tusome's sign-in page (signed out there too); else the voting-number page
+  if (!(await session.studentLeave())) router.push({ name: 'vote-login' })
 }
 </script>
 

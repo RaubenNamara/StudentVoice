@@ -25,6 +25,11 @@ export const useSession = defineStore('session', {
   }),
   getters: {
     isSuper: (s) => s.admin?.role === 'super_admin',
+    /**
+     * Where a student goes when they are done: back to Tusome, which signs them out there too and
+     * shows its sign-in page for the next student (shared computers). Empty = Student Voice's own page.
+     */
+    exitUrl: (s) => (s.tusomeUrl && (s.student?.via === 'tusome' || !s.votingNumbers) ? `${s.tusomeUrl}/signout` : ''),
   },
   actions: {
     async load(force = false) {
@@ -61,6 +66,14 @@ export const useSession = defineStore('session', {
       } finally {
         this.student = null
       }
+    },
+    /** Sign out here, then go back to Tusome (signed out there too) when they came from it */
+    async studentLeave(): Promise<boolean> {
+      const to = this.exitUrl
+      await this.studentLogout().catch(() => {})
+      if (!to) return false
+      window.location.href = to
+      return true
     },
   },
 })

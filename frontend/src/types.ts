@@ -15,6 +15,8 @@ export interface Student {
   name: string
   class: string
   stream: string
+  /** 'tusome' = signed in from the Tusome dashboard (they go back there when done) */
+  via?: 'tusome' | 'code'
 }
 
 export interface Question {

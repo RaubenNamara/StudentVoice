@@ -192,8 +192,23 @@ async function finish() {
   const polls = await api.get<{ id: number; accepting: boolean; voted: boolean }[]>('/vote/polls').catch(() => [])
   // this poll is finished for now even if some subjects were left out
   moreWaiting.value = polls.filter((p) => p.accepting && !p.voted && p.id !== poll.value?.id).length
-  if (!moreWaiting.value) await session.studentLogout()
+  if (moreWaiting.value) return
+  // From Tusome: signed out here now, then back to Tusome's sign-in page (signed out there too)
+  // after a few seconds, so the next student signs in with their own Tusome account.
+  leaveTo.value = session.exitUrl
+  await session.studentLogout()
+  if (leaveTo.value) {
+    const tick = setInterval(() => {
+      if (--leaveIn.value <= 0) {
+        clearInterval(tick)
+        window.location.href = leaveTo.value
+      }
+    }, 1000)
+  }
 }
+/** Tusome's sign-out page when the student came from Tusome, and the seconds until we go there */
+const leaveTo = ref('')
+const leaveIn = ref(6)
 
 const initials = (name: string) => name.split(' ').filter(Boolean).slice(0, 2).map((w) => w[0]).join('')
 </script>
@@ -225,8 +240,15 @@ const initials = (name: string) => name.split(' ').filter(Boolean).slice(0, 2).m
         <RouterLink :to="{ name: 'vote-polls' }" class="relative mt-4 inline-flex items-center gap-1 rounded-full bg-gold-400 px-6 py-3 font-semibold text-indigo-950 hover:bg-gold-300">Back to my polls <ChevronRightIcon class="h-4 w-4" /></RouterLink>
       </template>
       <template v-else>
-        <p class="relative mt-5 text-sm text-indigo-200">You have been signed out, so the next student can vote on this device.</p>
-        <RouterLink :to="{ name: 'vote-login' }" class="relative mt-4 inline-flex items-center gap-1 rounded-full bg-gold-400 px-6 py-3 font-semibold text-indigo-950 hover:bg-gold-300">Next student <ChevronRightIcon class="h-4 w-4" /></RouterLink>
+        <template v-if="leaveTo">
+          <p class="relative mt-5 text-sm text-indigo-200">You have been signed out of Student Voice and Tusome, so the next student can sign in to Tusome on this device.</p>
+          <a :href="leaveTo" class="relative mt-4 inline-flex items-center gap-1 rounded-full bg-gold-400 px-6 py-3 font-semibold text-indigo-950 hover:bg-gold-300">Next student <ChevronRightIcon class="h-4 w-4" /></a>
+          <p class="relative mt-3 text-xs text-indigo-200">Going back to Tusome in {{ Math.max(leaveIn, 0) }}…</p>
+        </template>
+        <template v-else>
+          <p class="relative mt-5 text-sm text-indigo-200">You have been signed out, so the next student can vote on this device.</p>
+          <RouterLink :to="{ name: 'vote-login' }" class="relative mt-4 inline-flex items-center gap-1 rounded-full bg-gold-400 px-6 py-3 font-semibold text-indigo-950 hover:bg-gold-300">Next student <ChevronRightIcon class="h-4 w-4" /></RouterLink>
+        </template>
       </template>
     </div>
 

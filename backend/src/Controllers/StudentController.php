@@ -129,20 +129,28 @@ final class StudentController
         Response::ok();
     }
 
-    /** Everything for printing voting slips: one class (and stream), in register order */
+    /**
+     * Everything for printing voting slips and stream lists: one class (and stream), or the whole
+     * school (class "all"), by class, stream and name
+     */
     public function slips(Request $r): never
     {
         $class = $r->string('class');
-        if (!in_array($class, self::CLASSES, true)) {
+        $all = $class === 'all';
+        if (!$all && !in_array($class, self::CLASSES, true)) {
             Response::error('Choose a class.', 422);
         }
-        $args = [$class];
-        $sql = "SELECT reg_no, name, class, stream, voter_code FROM students WHERE status = 'active' AND class = ?";
-        if (($stream = $r->string('stream')) !== '') {
-            $sql .= ' AND stream = ?';
-            $args[] = $stream;
+        $args = [];
+        $sql = "SELECT reg_no, name, class, stream, voter_code FROM students WHERE status = 'active'";
+        if (!$all) {
+            $sql .= ' AND class = ?';
+            $args[] = $class;
+            if (($stream = $r->string('stream')) !== '') {
+                $sql .= ' AND stream = ?';
+                $args[] = $stream;
+            }
         }
-        $stmt = Database::get()->prepare($sql . ' ORDER BY stream, name');
+        $stmt = Database::get()->prepare($sql . ' ORDER BY class, stream, name');
         $stmt->execute($args);
         Response::ok(['students' => $stmt->fetchAll()]);
     }

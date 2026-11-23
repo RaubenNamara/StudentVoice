@@ -130,6 +130,20 @@ async function notTaking() {
   }
 }
 
+/** "Not taking it" by mistake: open the subject again (ratings already given stay) */
+async function undoSkip(s: Subject) {
+  const name = subjectLook(s.subject).name
+  if (!(await confirm(`Do you take ${name}?`, `${name} opens again so you can rate your teacher.`, `Yes, I take ${name}`))) return
+  try {
+    await api.post(`/vote/polls/${poll.value!.id}/unskip`, { subject_id: s.subject_id })
+    s.skipped = false
+    s.done = Math.min(s.places, s.rated.length)
+    if (open(s)) openSubject(s)
+  } catch (e) {
+    toast(e instanceof ApiError ? e.message : 'Could not save. Try again.', 'error')
+  }
+}
+
 async function send(answers: Record<number, unknown>) {
   if (!poll.value) return
   const s = subject.value
@@ -366,9 +380,9 @@ const initials = (name: string) => name.split(' ').filter(Boolean).slice(0, 2).m
             v-for="s in core"
             :key="s.subject_id"
             class="group relative flex min-h-[9rem] flex-col rounded-2xl border border-line bg-surface p-4 text-left shadow-card transition"
-            :class="[open(s) ? 'hover:-translate-y-1 hover:shadow-lift' : 'cursor-default opacity-75', justDone === s.subject_id ? 'ring-4 ring-emerald-300' : '']"
-            :disabled="!open(s)"
-            @click="openSubject(s)"
+            :class="[open(s) ? 'hover:-translate-y-1 hover:shadow-lift' : s.skipped ? 'opacity-75 hover:opacity-100' : 'cursor-default opacity-75', justDone === s.subject_id ? 'ring-4 ring-emerald-300' : '']"
+            :disabled="!open(s) && !s.skipped"
+            @click="s.skipped ? undoSkip(s) : openSubject(s)"
           >
             <div class="flex items-start justify-between">
               <div class="flex h-11 w-11 items-center justify-center rounded-xl" :class="look(s.subject).tone"><component :is="look(s.subject).icon" class="h-6 w-6" /></div>
@@ -376,7 +390,7 @@ const initials = (name: string) => name.split(' ').filter(Boolean).slice(0, 2).m
             </div>
             <span class="mt-3 font-semibold leading-tight">{{ look(s.subject).name }}</span>
             <span class="mt-auto pt-2 text-xs text-gray-500">
-              <template v-if="s.skipped">Not taking it</template>
+              <template v-if="s.skipped">Not taking it · <span class="font-medium text-indigo-700 underline dark:text-crest-300">Undo</span></template>
               <template v-else-if="!open(s)">Done - thank you</template>
               <template v-else-if="s.places > 1">{{ s.rated.length ? `${s.rated.length} rated` : `Choose from ${s.places} teachers` }}</template>
               <span v-else-if="s.assigned[0]" class="font-medium text-ink">{{ s.assigned[0].name }}</span>
@@ -391,9 +405,9 @@ const initials = (name: string) => name.split(' ').filter(Boolean).slice(0, 2).m
               v-for="s in electives"
               :key="s.subject_id"
               class="group relative flex min-h-[9rem] flex-col rounded-2xl border border-line bg-surface p-4 text-left shadow-card transition"
-              :class="[open(s) ? 'hover:-translate-y-1 hover:shadow-lift' : 'cursor-default opacity-75', justDone === s.subject_id ? 'ring-4 ring-emerald-300' : '']"
-              :disabled="!open(s)"
-              @click="openSubject(s)"
+              :class="[open(s) ? 'hover:-translate-y-1 hover:shadow-lift' : s.skipped ? 'opacity-75 hover:opacity-100' : 'cursor-default opacity-75', justDone === s.subject_id ? 'ring-4 ring-emerald-300' : '']"
+              :disabled="!open(s) && !s.skipped"
+              @click="s.skipped ? undoSkip(s) : openSubject(s)"
             >
               <div class="flex items-start justify-between">
                 <div class="flex h-11 w-11 items-center justify-center rounded-xl" :class="look(s.subject).tone"><component :is="look(s.subject).icon" class="h-6 w-6" /></div>
@@ -401,7 +415,7 @@ const initials = (name: string) => name.split(' ').filter(Boolean).slice(0, 2).m
               </div>
               <span class="mt-3 font-semibold leading-tight">{{ look(s.subject).name }}</span>
               <span class="mt-auto pt-2 text-xs text-gray-500">
-                <template v-if="s.skipped">Not taking it</template>
+                <template v-if="s.skipped">Not taking it · <span class="font-medium text-indigo-700 underline dark:text-crest-300">Undo</span></template>
                 <template v-else-if="!open(s)">Done - thank you</template>
                 <template v-else-if="s.places > 1">{{ s.rated.length ? `${s.rated.length} rated` : `Choose from ${s.places} teachers` }}</template>
                 <span v-else-if="s.assigned[0]" class="font-medium text-ink">{{ s.assigned[0].name }}</span>

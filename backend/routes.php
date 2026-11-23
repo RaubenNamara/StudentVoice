@@ -33,6 +33,7 @@ $router->get('/api/vote/polls', [VoteController::class, 'polls'], $student);
 $router->get('/api/vote/polls/{id}', [VoteController::class, 'poll'], $student);
 $router->post('/api/vote/polls/{id}', [VoteController::class, 'submit'], $student);
 $router->post('/api/vote/polls/{id}/skip', [VoteController::class, 'skip'], $student);
+$router->post('/api/vote/polls/{id}/unskip', [VoteController::class, 'unskip'], $student);
 
 // Admins
 $router->post('/api/admin/logout', [AuthController::class, 'adminLogout'], ['before_password' => true]);

@@ -202,6 +202,43 @@ final class VoteController
         Response::ok();
     }
 
+    /**
+     * Undoes "I don't take this subject" / "I'm done" (tapped by mistake): the subject opens again.
+     * Removes only this student's skip marks for it (and their "not my teacher" marks for its
+     * teachers); teachers they rated stay rated.
+     */
+    public function unskip(Request $r): never
+    {
+        $student = Auth::student();
+        $db = Database::get();
+        $poll = Polls::find($db, (int) $r->param('id'));
+        if (!$poll || $poll['status'] === 'draft' || $poll['about'] !== 'teachers' || !Polls::forClass($poll, $student['class'])) {
+            Response::error('This poll is not open to your class.', 404);
+        }
+        if (!$poll['accepting']) {
+            Response::error('This poll has closed.', 410);
+        }
+        $su = (int) $r->input('subject_id', 0);
+        $subject = null;
+        foreach ($this->subjects($db, $poll, $student) as $s) {
+            if ($s['subject_id'] === $su) {
+                $subject = $s;
+            }
+        }
+        if (!$subject) {
+            Response::error('That subject is not on your list for this poll.', 422);
+        }
+        if (!$subject['skipped']) {
+            Response::error('This subject is already open.', 422);
+        }
+        $sid = (int) $student['id'];
+        $gates = array_map(fn ($t) => Gate::for($poll['id'], $sid, (int) $t, $su), [0, ...$subject['options'], ...$subject['assigned']]);
+        $gates = array_values(array_unique($gates));
+        $db->prepare('DELETE FROM vote_gates WHERE poll_id = ? AND skipped = 1 AND gate IN (' . implode(',', array_fill(0, count($gates), '?')) . ')')
+            ->execute([$poll['id'], ...$gates]);
+        Response::ok();
+    }
+
     private function markNotMine(PDO $db, int $pollId, int $studentId, int $subjectId, array $teacherIds): void
     {
         $stmt = $db->prepare('INSERT IGNORE INTO vote_gates (poll_id, gate, teacher_id, subject_id, skipped) VALUES (?, ?, ?, ?, 1)');

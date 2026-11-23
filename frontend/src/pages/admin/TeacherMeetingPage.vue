@@ -325,31 +325,11 @@ const print = () => window.print()
             <p class="text-xs text-gray-600">{{ subjectLook(r.subject).name }} · {{ r.ratings }} students rated</p>
           </div>
           <div class="flex shrink-0 items-center gap-2">
-            <span class="rounded-lg bg-gray-50 px-2.5 py-1 text-center text-xs text-gray-600"><span class="block text-base font-semibold tabular-nums text-ink">{{ share(overall(r), 3, 4) }}%</span>agree</span>
-            <span class="rounded-lg px-2.5 py-1 text-center text-xs" :class="scoreCell(average(overall(r)))"><span class="block text-base font-semibold tabular-nums">{{ asPct(average(overall(r))) }}</span>score · {{ fmt(average(overall(r))) }}/5</span>
             <button type="button" class="no-print rounded-lg px-2 py-1 text-xs text-gray-500 hover:bg-gray-50 hover:text-ink" title="Leave this teacher out of the printout" @click="left.add(key(r))">Leave out</button>
           </div>
         </div>
-        <div class="mt-2"><LikertBar :counts="overall(r)" /></div>
-
-        <div v-if="ranked(r).length" class="mt-3 grid grid-cols-2 gap-4 text-[0.8rem]">
-          <div>
-            <p class="text-[0.7rem] font-semibold uppercase tracking-wider text-indigo-800">Strongest</p>
-            <ul class="mt-1 space-y-1">
-              <li v-for="x in strengths(r)" :key="x.q.id" class="flex justify-between gap-2"><span>{{ x.q.prompt }}</span><span class="shrink-0 font-semibold tabular-nums text-indigo-800">{{ share(x.c, 3, 4) }}% agree</span></li>
-            </ul>
-          </div>
-          <div>
-            <p class="text-[0.7rem] font-semibold uppercase tracking-wider text-red-700">To work on</p>
-            <ul class="mt-1 space-y-1">
-              <li v-for="x in toWorkOn(r)" :key="x.q.id" class="flex justify-between gap-2"><span>{{ x.q.prompt }}</span><span class="shrink-0 font-semibold tabular-nums text-red-700">{{ weakNote(x.c) }}</span></li>
-              <li v-if="!toWorkOn(r).length" class="text-gray-500">Not enough answers per statement yet.</li>
-            </ul>
-          </div>
-        </div>
-
         <!-- comments: the ticked ones print; the picker is screen-only -->
-        <div v-if="d.comment_questions.length" class="mt-3 grid grid-cols-2 gap-4 text-[0.8rem]">
+        <div v-if="d.comment_questions.length" class="mt-2 grid grid-cols-2 gap-4 text-[0.8rem]">
           <div v-for="q in d.comment_questions" :key="q.id">
             <p class="text-[0.7rem] font-semibold uppercase tracking-wider text-gold-700">{{ label(q.prompt) }}</p>
             <ol v-if="printed(r, q.id).length" class="mt-1 space-y-1">
@@ -376,6 +356,33 @@ const print = () => window.print()
               </ul>
             </div>
           </div>
+        </div>
+
+        <!-- the numbers, below the comments -->
+        <div class="stats mt-3 border-t border-dashed border-line pt-3">
+          <div class="flex items-center gap-3">
+            <div class="min-w-0 flex-1"><LikertBar :counts="overall(r)" /></div>
+            <div class="flex shrink-0 items-center gap-2">
+              <span class="rounded-lg bg-gray-50 px-2.5 py-1 text-center text-xs text-gray-600"><span class="block text-base font-semibold tabular-nums text-ink">{{ share(overall(r), 3, 4) }}%</span>agree</span>
+              <span class="rounded-lg px-2.5 py-1 text-center text-xs" :class="scoreCell(average(overall(r)))"><span class="block text-base font-semibold tabular-nums">{{ asPct(average(overall(r))) }}</span>score · {{ fmt(average(overall(r))) }}/5</span>
+            </div>
+          </div>
+          <div v-if="ranked(r).length" class="mt-3 grid grid-cols-2 gap-4 text-[0.8rem]">
+            <div>
+              <p class="text-[0.7rem] font-semibold uppercase tracking-wider text-indigo-800">Strongest</p>
+              <ul class="mt-1 space-y-1">
+                <li v-for="x in strengths(r)" :key="x.q.id" class="flex justify-between gap-2"><span>{{ x.q.prompt }}</span><span class="shrink-0 font-semibold tabular-nums text-indigo-800">{{ share(x.c, 3, 4) }}% agree</span></li>
+              </ul>
+            </div>
+            <div>
+              <p class="text-[0.7rem] font-semibold uppercase tracking-wider text-red-700">To work on</p>
+              <ul class="mt-1 space-y-1">
+                <li v-for="x in toWorkOn(r)" :key="x.q.id" class="flex justify-between gap-2"><span>{{ x.q.prompt }}</span><span class="shrink-0 font-semibold tabular-nums text-red-700">{{ weakNote(x.c) }}</span></li>
+                <li v-if="!toWorkOn(r).length" class="text-gray-500">Not enough answers per statement yet.</li>
+              </ul>
+            </div>
+          </div>
+
         </div>
       </article>
 

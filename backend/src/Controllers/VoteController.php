@@ -220,9 +220,8 @@ final class VoteController
         $list = TeachingList::subjectsFor($db, $student);
         // subjects Tusome says this student takes; others on their stream's list are electives
         // (optional: only if they take them). With no Tusome subjects at all, none are electives.
-        $mine = $db->prepare('SELECT subject_id FROM student_subjects WHERE student_id = ?');
-        $mine->execute([$student['id']]);
-        $mine = array_flip(array_map('intval', $mine->fetchAll(PDO::FETCH_COLUMN)));
+        // (Tusome's record plus the school's rules, e.g. every O-level student takes English)
+        $mine = TeachingList::takes($db, $student);
         if (!$list) {
             return [];
         }

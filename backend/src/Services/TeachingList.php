@@ -86,6 +86,17 @@ final class TeachingList
         )->fetchAll(PDO::FETCH_NUM) as [$c, $sr, $su]) {
             $streamTakes["$c|$sr"][(int) $su] = true;
         }
+        // who has anything at all from Tusome (before the school's rules add to it)
+        $recorded = array_map(fn () => true, $subjects);
+        // the school's rules count as recorded, also for the stream, so a listed teacher for such a
+        // subject is rated by these students rather than the whole stream
+        foreach (self::ruleSubjects($db, $streamWhere) as [$st, $c, $sr, $su]) {
+            $streamTakes["$c|$sr"][$su] = true;
+            if (isset($students[$st])) {
+                $subjects[$st][$su] = true;
+            }
+        }
+
         $order = $db->query('SELECT id FROM subjects ORDER BY name')->fetchAll(PDO::FETCH_COLUMN);
         $rank = array_flip(array_map('intval', $order));
 
@@ -94,10 +105,11 @@ final class TeachingList
             $k = "{$s['class']}|{$s['stream']}";
             $cell = $teaching[$k] ?? [];
             // Tusome's subjects for this student, plus listed subjects Tusome knows nobody in the
-            // stream takes (electives Tusome doesn't record: the whole stream rates them)
+            // stream takes (electives Tusome doesn't record: the whole stream rates them). With
+            // nothing at all from Tusome: their stream's whole list.
             $takes = array_keys($subjects[$id] ?? []);
             foreach (array_keys($cell) as $su) {
-                if (!isset($streamTakes[$k][$su])) {
+                if (!isset($recorded[$id]) || !isset($streamTakes[$k][$su])) {
                     $takes[] = $su;
                 }
             }
@@ -108,6 +120,62 @@ final class TeachingList
                 $list[$su] = array_values(array_unique($own[$id][$su] ?? $cell[$su] ?? []));
             }
             $out[$id] = $list;
+        }
+        return $out;
+    }
+
+    /**
+     * The subjects a student takes: Tusome's record plus the school's rules (empty = nothing
+     * recorded, so nothing is optional for them)
+     *
+     * @return array<int, true> subject id => true
+     */
+    public static function takes(PDO $db, array $student): array
+    {
+        $stmt = $db->prepare('SELECT subject_id FROM student_subjects WHERE student_id = ?');
+        $stmt->execute([(int) $student['id']]);
+        $out = array_fill_keys(array_map('intval', $stmt->fetchAll(PDO::FETCH_COLUMN)), true);
+        if (!$out) {
+            return [];
+        }
+        $where = ' AND st.id = ' . (int) $student['id'];
+        foreach (self::ruleSubjects($db, $where) as [, , , $su]) {
+            $out[$su] = true;
+        }
+        return $out;
+    }
+
+    /**
+     * St Mark's subject rules, for what Tusome's enrolments miss:
+     * - O-level (S.1-S.4): everyone takes English
+     * - A-level (S.5-S.6): Economics without Entrepreneurship means Sub-Maths
+     * $where narrows the students (SQL on alias st, already escaped).
+     *
+     * @return list<array{0: int, 1: string, 2: string, 3: int}> [student id, class, stream, subject id]
+     */
+    private static function ruleSubjects(PDO $db, string $where): array
+    {
+        $ids = $db->query("SELECT UPPER(name), MIN(id) FROM subjects WHERE status = 'active' AND UPPER(name) IN ('ENG', 'ECON', 'ENT', 'SUB-MTC') GROUP BY UPPER(name)")->fetchAll(PDO::FETCH_KEY_PAIR);
+        $out = [];
+        $add = function (string $sql, array $args, int $subject) use ($db, &$out): void {
+            $stmt = $db->prepare($sql);
+            $stmt->execute($args);
+            foreach ($stmt->fetchAll(PDO::FETCH_NUM) as [$st, $c, $sr]) {
+                $out[] = [(int) $st, (string) $c, (string) $sr, $subject];
+            }
+        };
+        if (isset($ids['ENG'])) {
+            $add("SELECT st.id, st.class, st.stream FROM students st WHERE st.status = 'active' AND st.class IN ('S.1', 'S.2', 'S.3', 'S.4')$where", [], (int) $ids['ENG']);
+        }
+        if (isset($ids['ECON'], $ids['ENT'], $ids['SUB-MTC'])) {
+            $add(
+                "SELECT st.id, st.class, st.stream FROM students st
+                 WHERE st.status = 'active' AND st.class IN ('S.5', 'S.6')
+                   AND EXISTS (SELECT 1 FROM student_subjects x WHERE x.student_id = st.id AND x.subject_id = ?)
+                   AND NOT EXISTS (SELECT 1 FROM student_subjects x WHERE x.student_id = st.id AND x.subject_id = ?)$where",
+                [(int) $ids['ECON'], (int) $ids['ENT']],
+                (int) $ids['SUB-MTC']
+            );
         }
         return $out;
     }

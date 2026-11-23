@@ -8,6 +8,7 @@ import { api } from '@/api'
 import { formatDate } from '@/feedback'
 import { asPct, fmt, scoreCell } from '@/scores'
 import { subjectLook } from '@/subjects'
+import { FLAGS, flagOf } from '@/commentFlags'
 import { SCALE, type Poll } from '@/types'
 import { useSession } from '@/stores/session'
 
@@ -55,6 +56,9 @@ const subject = ref<number | 0>(0)
 const perPage = ref<2 | 3>(3)
 const perQuestion = ref(3)
 const order = ref<'name' | 'best' | 'lowest'>('name')
+/** only teachers with a sensitive comment; and the top 5 / bottom 5 page at the end */
+const onlyFlagged = ref(false)
+const withSummary = ref(true)
 const left = reactive(new Set<string>()) // teachers left out ("t|s")
 const chosen = reactive(new Set<string>()) // comments to print ("t|s|q|i")
 const openPicker = reactive(new Set<string>()) // comment lists opened to choose from
@@ -102,14 +106,36 @@ function worth(text: string): number {
 }
 const clean = (t: string) => t.trim().replace(/\s+/g, ' ').replace(/^./, (c) => c.toUpperCase())
 
-/** The comments worth offering (repeats merged), most useful first */
+/**
+ * The comments worth offering (repeats merged): sensitive ones first (harassment of any kind, then
+ * academic concerns), then the most useful. A sensitive comment is kept however short it is.
+ */
 function offered(r: Row, qid: number) {
   const seen = new Set<string>()
   return (r.comments[qid] ?? [])
-    .map((text, i) => ({ text: clean(text), i, w: worth(text) }))
-    .filter((c) => c.w > 0 && !seen.has(c.text.toLowerCase()) && seen.add(c.text.toLowerCase()))
-    .sort((a, b) => b.w - a.w)
+    .map((text, i) => ({ text: clean(text), i, w: worth(text), flag: flagOf(text) }))
+    .filter((c) => (c.w > 0 || c.flag) && c.text.length > 1 && !seen.has(c.text.toLowerCase()) && seen.add(c.text.toLowerCase()))
+    .sort((a, b) => (a.flag?.rank ?? 9) - (b.flag?.rank ?? 9) || b.w - a.w)
 }
+/** Sensitive comments found, per kind, across the teachers being printed */
+const flagged = computed(() => {
+  const out = new Map<string, { label: string; count: number; teachers: Set<string> }>()
+  for (const s of sheets.value) {
+    for (const r of s.rows) {
+      for (const q of d.value?.comment_questions ?? []) {
+        for (const c of offered(r, q.id)) {
+          if (!c.flag) continue
+          const e = out.get(c.flag.key) ?? { label: c.flag.label, count: 0, teachers: new Set<string>() }
+          e.count++
+          e.teachers.add(key(r))
+          out.set(c.flag.key, e)
+        }
+      }
+    }
+  }
+  return FLAGS.filter((f) => out.has(f.key)).map((f) => ({ key: f.key, ...out.get(f.key)! }))
+})
+const hasFlag = (r: Row) => (d.value?.comment_questions ?? []).some((q) => offered(r, q.id).some((c) => c.flag))
 const ck = (r: Row, qid: number, i: number) => `${key(r)}|${qid}|${i}`
 
 function pickDefaults() {
@@ -152,7 +178,7 @@ const sheets = computed(() => {
   const out: { subject: string; part: number; parts: number; rows: Row[] }[] = []
   for (const s of subjects.value) {
     if (subject.value && subject.value !== s.id) continue
-    const rows = sorted((d.value?.teachers ?? []).filter((r) => r.subject_id === s.id && !left.has(key(r))))
+    const rows = sorted((d.value?.teachers ?? []).filter((r) => r.subject_id === s.id && !left.has(key(r)) && (!onlyFlagged.value || hasFlag(r))))
     const parts = Math.ceil(rows.length / perPage.value)
     for (let p = 0; p < parts; p++) out.push({ subject: s.name, part: p + 1, parts, rows: rows.slice(p * perPage.value, (p + 1) * perPage.value) })
   }
@@ -162,8 +188,32 @@ const sheets = computed(() => {
 const leftOut = computed(() => (d.value?.teachers ?? []).filter((r) => left.has(key(r)) && (!subject.value || r.subject_id === subject.value)))
 const teacherCount = computed(() => sheets.value.reduce((n, s) => n + s.rows.length, 0))
 
+/* ---------- the general summary: best 5 and lowest 5 ---------- */
+const scoreOf = (r: Row) => average(overall(r)) ?? 0
+/** Teachers the summary ranks: the chosen subject(s), less any left out */
+const inScope = computed(() => (d.value?.teachers ?? []).filter((r) => (!subject.value || r.subject_id === subject.value) && !left.has(key(r))))
+const best = computed(() => [...inScope.value].sort((a, b) => scoreOf(b) - scoreOf(a) || b.ratings - a.ratings).slice(0, 5))
+/** Lowest first; never a teacher already in the best 5 (when there are fewer than 10) */
+const lowest = computed(() => {
+  const top = new Set(best.value.map(key))
+  return [...inScope.value].filter((r) => !top.has(key(r))).sort((a, b) => scoreOf(a) - scoreOf(b) || b.ratings - a.ratings).slice(0, 5)
+})
+const showSummary = computed(() => withSummary.value && inScope.value.length >= 2)
+const pageCount = computed(() => sheets.value.length + (showSummary.value ? 1 : 0))
+const summaryTables = computed(() => [
+  { title: 'Best performing teachers', rows: best.value, tone: 'text-indigo-800', bar: 'bg-indigo-700' },
+  { title: 'Teachers who need the most support', rows: lowest.value, tone: 'text-red-700', bar: 'bg-red-600' },
+])
+
 const PER = [2, 3] as const
 const SWATCH = ['bg-lk-1', 'bg-lk-2', 'bg-lk-3', 'bg-lk-4', 'bg-lk-5']
+/** Colour of a sensitive-comment tag (on screen and paper) */
+const FLAG_TONE: Record<string, string> = {
+  sexual: 'bg-red-100 text-red-800 ring-red-300',
+  physical: 'bg-red-100 text-red-800 ring-red-300',
+  verbal: 'bg-orange-100 text-orange-800 ring-orange-300',
+  academic: 'bg-gold-50 text-gold-700 ring-gold-300',
+}
 const today = formatDate(new Date().toISOString(), false)
 const print = () => window.print()
 </script>
@@ -184,7 +234,7 @@ const print = () => window.print()
           <h1 class="text-2xl font-semibold tracking-tight">Meeting report</h1>
           <p class="mt-1 text-sm text-gray-600">{{ d.poll.title }} · teachers {{ perPage }} to a page, a subject at a time, with chosen student comments</p>
         </div>
-        <button class="btn-primary" :disabled="!sheets.length" @click="print"><PrinterIcon class="h-4 w-4" /> Print {{ sheets.length }} page{{ sheets.length === 1 ? '' : 's' }}</button>
+        <button class="btn-primary" :disabled="!pageCount" @click="print"><PrinterIcon class="h-4 w-4" /> Print report</button>
       </div>
 
       <div class="card mt-4 grid gap-4 p-5 sm:grid-cols-2 lg:grid-cols-4">
@@ -205,7 +255,7 @@ const print = () => window.print()
           <span class="label">Comments to pick for each</span>
           <select v-model.number="perQuestion" class="input">
             <option :value="0">None</option>
-            <option v-for="n in [1, 2, 3, 4, 5]" :key="n" :value="n">{{ n }} of each kind</option>
+            <option v-for="n in 10" :key="n" :value="n">{{ n === 10 ? 'Up to 10' : n }} of each kind</option>
           </select>
         </label>
         <label class="block">
@@ -217,8 +267,22 @@ const print = () => window.print()
           </select>
         </label>
       </div>
+      <div class="mt-3 flex flex-wrap gap-x-6 gap-y-2 text-sm">
+        <label class="flex items-center gap-2"><input v-model="onlyFlagged" type="checkbox" class="rounded" /> Only teachers with sensitive comments</label>
+        <label class="flex items-center gap-2"><input v-model="withSummary" type="checkbox" class="rounded" /> Add a last page: best 5 and lowest 5 teachers</label>
+      </div>
+
+      <!-- sensitive comments found (harassment, academic concerns) -->
+      <div v-if="flagged.length" class="mt-4 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-900 dark:border-red-900 dark:bg-red-950/40 dark:text-red-200">
+        <p class="font-semibold">Sensitive comments found</p>
+        <p class="mt-1 flex flex-wrap gap-2">
+          <span v-for="f in flagged" :key="f.key" class="rounded-full px-2.5 py-0.5 text-xs font-semibold ring-1" :class="FLAG_TONE[f.key]">{{ f.label }}: {{ f.count }} ({{ f.teachers.size }} teacher{{ f.teachers.size === 1 ? '' : 's' }})</span>
+        </p>
+        <p class="mt-2 text-xs">They are listed first under each teacher and marked. They are found by their words, so read every comment too: some may be missed (other wording, Luganda) or marked by mistake. Harassment reports may need to be followed up privately, not only read out in the meeting.</p>
+      </div>
+
       <p class="mt-3 text-sm text-gray-600">
-        The most useful comments are ticked for you. Under each teacher, <strong>Choose comments</strong> lets you tick or untick any of them; only ticked ones print.
+        Sensitive comments come first, then the most useful ones, and they are ticked for you. Under each teacher, <strong>Choose comments</strong> lets you tick or untick any of them; only ticked ones print.
         <template v-if="d.hidden"> {{ d.hidden }} teacher{{ d.hidden === 1 ? ' has' : 's have' }} fewer than {{ d.min_group }} ratings and {{ d.hidden === 1 ? 'is' : 'are' }} not in the report.</template>
       </p>
       <p v-if="leftOut.length" class="mt-2 flex flex-wrap items-center gap-2 text-sm text-gray-600">
@@ -229,11 +293,12 @@ const print = () => window.print()
 
     <div v-if="!sheets.length" class="card mt-6 flex items-start gap-3 p-6 text-sm text-gray-600">
       <EyeSlashIcon class="h-5 w-5 shrink-0" />
-      <p>No teacher has {{ d.min_group }} or more ratings yet<template v-if="subject"> in this subject</template>. Teachers appear here once enough students have rated them, so nobody can work out what a particular student said.</p>
+      <p v-if="onlyFlagged && inScope.length">No sensitive comments were found for these teachers. Untick <strong>Only teachers with sensitive comments</strong> to see everyone.</p>
+      <p v-else>No teacher has {{ d.min_group }} or more ratings yet<template v-if="subject"> in this subject</template>. Teachers appear here once enough students have rated them, so nobody can work out what a particular student said.</p>
     </div>
 
     <!-- The pages -->
-    <section v-for="(s, n) in sheets" :key="s.subject + s.part" class="sheet force-light mt-6 rounded-2xl border border-line bg-white p-6 text-[rgb(24,24,38)] shadow-sm">
+    <section v-for="s in sheets" :key="s.subject + s.part" class="sheet force-light mt-6 rounded-2xl border border-line bg-white p-6 text-[rgb(24,24,38)] shadow-sm">
       <!-- letterhead -->
       <header class="flex items-center gap-3 border-b-4 border-double border-indigo-800 pb-2">
         <BrandMark :size="44" />
@@ -287,9 +352,15 @@ const print = () => window.print()
         <div v-if="d.comment_questions.length" class="mt-3 grid grid-cols-2 gap-4 text-[0.8rem]">
           <div v-for="q in d.comment_questions" :key="q.id">
             <p class="text-[0.7rem] font-semibold uppercase tracking-wider text-gold-700">{{ label(q.prompt) }}</p>
-            <ul v-if="printed(r, q.id).length" class="mt-1 space-y-1">
-              <li v-for="c in printed(r, q.id)" :key="c.i" class="border-l-2 border-crest-300 pl-2 italic leading-snug">“{{ c.text }}”</li>
-            </ul>
+            <ol v-if="printed(r, q.id).length" class="mt-1 space-y-1">
+              <li v-for="(c, k) in printed(r, q.id)" :key="c.i" class="flex gap-1.5 leading-snug">
+                <span class="w-5 shrink-0 text-right font-semibold tabular-nums text-gray-500">{{ k + 1 }}.</span>
+                <span class="min-w-0">
+                  <span v-if="c.flag" class="mr-1 whitespace-nowrap rounded px-1.5 py-px text-[0.65rem] font-semibold not-italic ring-1" :class="FLAG_TONE[c.flag.key]">{{ c.flag.label }}</span>
+                  <span class="italic">“{{ c.text }}”</span>
+                </span>
+              </li>
+            </ol>
             <p v-else class="mt-1 text-gray-500">{{ offered(r, q.id).length ? 'None chosen.' : 'No written comments.' }}</p>
             <div v-if="offered(r, q.id).length" class="no-print mt-1.5">
               <button type="button" class="text-xs font-semibold text-indigo-700 hover:underline" @click="togglePicker(key(r) + '|' + q.id)">
@@ -299,7 +370,7 @@ const print = () => window.print()
                 <li v-for="c in offered(r, q.id)" :key="c.i">
                   <label class="flex cursor-pointer items-start gap-2 rounded px-1 py-0.5 hover:bg-gray-50">
                     <input type="checkbox" class="mt-0.5 rounded" :checked="chosen.has(ck(r, q.id, c.i))" @change="toggle(ck(r, q.id, c.i))" />
-                    <span>{{ c.text }}</span>
+                    <span><span v-if="c.flag" class="mr-1 rounded px-1.5 py-px text-[0.65rem] font-semibold ring-1" :class="FLAG_TONE[c.flag.key]">{{ c.flag.label }}</span>{{ c.text }}</span>
                   </label>
                 </li>
               </ul>
@@ -310,7 +381,59 @@ const print = () => window.print()
 
       <footer class="mt-3 flex justify-between text-[0.68rem] text-gray-500">
         <span>Anonymous: students' names are never kept with their answers. Teachers with fewer than {{ d.min_group }} ratings are not shown.</span>
-        <span class="shrink-0 pl-3">Page {{ n + 1 }} of {{ sheets.length }} · {{ today }}</span>
+        <span class="shrink-0 pl-3">{{ today }}</span>
+      </footer>
+    </section>
+
+    <!-- The last page: best 5 and lowest 5 -->
+    <section v-if="showSummary" class="sheet force-light mt-6 rounded-2xl border border-line bg-white p-6 text-[rgb(24,24,38)] shadow-sm">
+      <header class="flex items-center gap-3 border-b-4 border-double border-indigo-800 pb-2">
+        <BrandMark :size="44" />
+        <div class="min-w-0 flex-1">
+          <p class="text-base font-semibold uppercase tracking-wide text-indigo-900">{{ session.school || "St. Mark's College Namagoma" }}</p>
+          <p class="text-xs text-gray-700">Student Voice · {{ d.poll.title }} · <strong>confidential, for the staff meeting</strong></p>
+        </div>
+        <div class="text-right">
+          <p class="text-lg font-semibold leading-tight text-indigo-900">General summary</p>
+          <p class="text-xs text-gray-600">{{ subject ? subjects.find((x) => x.id === subject)?.name : 'All subjects' }} · {{ inScope.length }} teachers</p>
+        </div>
+      </header>
+      <p class="mt-2 text-xs text-gray-600">Ranked by score: the average answer out of 5, as a %. School average {{ asPct(average(d.school)) }} ({{ fmt(average(d.school)) }}). Only teachers rated by {{ d.min_group }} or more students.</p>
+
+      <div v-for="t in summaryTables" :key="t.title" class="mt-5">
+        <h2 class="text-base font-semibold" :class="t.tone">{{ t.title }} <span class="font-normal text-gray-500">({{ t.rows.length }})</span></h2>
+        <table class="mt-2 w-full text-sm">
+          <thead class="text-left text-[0.68rem] uppercase tracking-wider text-gray-500">
+            <tr>
+              <th class="w-8 py-1.5 pr-2 font-semibold">#</th>
+              <th class="py-1.5 pr-3 font-semibold">Teacher</th>
+              <th class="py-1.5 pr-3 font-semibold">Subject</th>
+              <th class="py-1.5 pr-3 text-right font-semibold">Students</th>
+              <th class="py-1.5 pr-3 text-right font-semibold">Agree</th>
+              <th class="w-[30%] py-1.5 font-semibold">Score</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="(r, i) in t.rows" :key="key(r)" class="border-t border-line">
+              <td class="py-2 pr-2 font-semibold tabular-nums text-gray-500">{{ i + 1 }}</td>
+              <td class="py-2 pr-3 font-medium">{{ r.teacher }}</td>
+              <td class="py-2 pr-3 text-gray-600">{{ subjectLook(r.subject).name }}</td>
+              <td class="py-2 pr-3 text-right tabular-nums text-gray-600">{{ r.ratings }}</td>
+              <td class="py-2 pr-3 text-right tabular-nums">{{ share(overall(r), 3, 4) }}%</td>
+              <td class="py-2">
+                <div class="flex items-center gap-2">
+                  <div class="h-2.5 flex-1 overflow-hidden rounded-full bg-gray-100"><div class="h-full rounded-full" :class="t.bar" :style="{ width: `${(scoreOf(r) / 5) * 100}%` }" /></div>
+                  <span class="w-24 shrink-0 text-right font-semibold tabular-nums" :class="t.tone">{{ asPct(scoreOf(r)) }} <span class="text-xs font-normal text-gray-500">{{ fmt(scoreOf(r)) }}</span></span>
+                </div>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <footer class="mt-5 flex justify-between text-[0.68rem] text-gray-500">
+        <span>Anonymous: students' names are never kept with their answers. Teachers with fewer than {{ d.min_group }} ratings are not ranked.</span>
+        <span class="shrink-0 pl-3">{{ today }}</span>
       </footer>
     </section>
 

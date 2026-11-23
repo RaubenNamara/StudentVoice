@@ -68,7 +68,11 @@ body {
   body { background: #fff; }
   /* charts keep their colours on paper */
   * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-  @page { margin: 12mm; }
+  @page {
+    margin: 12mm 12mm 14mm;
+    /* real page numbers (a long section can run onto a second page) */
+    @bottom-right { content: "Page " counter(page) " of " counter(pages); font: 9px Inter, sans-serif; color: #78716c; }
+  }
   .no-print { display: none !important; }
   /* paper is always light, even when the screen is in dark mode */
   .dark {

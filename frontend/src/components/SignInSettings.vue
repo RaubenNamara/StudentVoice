@@ -50,7 +50,7 @@ async function setVotingNumbers(on: boolean) {
         <div class="flex items-start justify-between gap-3">
           <div>
             <p class="text-sm font-semibold">Voting numbers (slips)</p>
-            <p class="mt-1 text-sm text-gray-600">{{ s.voting_numbers ? 'On: students can also type the number on their slip.' : 'Off: slips no longer work; students come in from Tusome only.' }}</p>
+            <p class="mt-1 text-sm text-gray-600">{{ s.voting_numbers ? 'On: students can also sign in here with their registration number (or slip number).' : 'Off: slips no longer work; students come in from Tusome only.' }}</p>
           </div>
           <button
             role="switch"

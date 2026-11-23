@@ -115,26 +115,36 @@ final class AuthController
         return null;
     }
 
-    /** A student signs in with the voting number on their slip */
+    /** A student signs in with their registration number (or a slip's voting number) */
     public function studentLogin(Request $r): never
     {
         if (!\StudentVoice\Support\Settings::votingNumbers()) {
-            Response::error('Voting numbers are switched off. Open Student Voice from your Tusome dashboard.', 403, ['code' => 'use_tusome']);
+            Response::error('Signing in here is switched off. Open Student Voice from your Tusome dashboard.', 403, ['code' => 'use_tusome']);
         }
         Throttle::check('student');
-        $code = VoterCode::normalise($r->string('code'));
-        if (!VoterCode::complete($code)) {
-            Response::error('A voting number has 6 letters and numbers, like K7P-4QX.', 422);
+        // the registration number (as in SMIS / Tusome), or the voting number from a slip
+        $typed = trim($r->string('code'));
+        if ($typed === '') {
+            Response::error('Type your registration number.', 422);
         }
-        $stmt = Database::get()->prepare('SELECT id, status FROM students WHERE voter_code = ?');
-        $stmt->execute([$code]);
+        $db = Database::get();
+        $stmt = $db->prepare('SELECT id, status FROM students WHERE UPPER(TRIM(reg_no)) = ? ORDER BY status = \'active\' DESC LIMIT 1');
+        $stmt->execute([\StudentVoice\Services\SmisSync::key($typed)]);
         $student = $stmt->fetch();
         if (!$student) {
+            $code = VoterCode::normalise($typed);
+            if (VoterCode::complete($code)) {
+                $stmt = $db->prepare('SELECT id, status FROM students WHERE voter_code = ?');
+                $stmt->execute([$code]);
+                $student = $stmt->fetch();
+            }
+        }
+        if (!$student) {
             Throttle::fail('student');
-            Response::error('That voting number was not found. Check your slip and try again.', 422);
+            Response::error('That registration number was not found. Check it and try again, like 22-09390.', 422);
         }
         if ($student['status'] !== 'active') {
-            Response::error('This voting number is no longer in use. See the person running the vote.', 403);
+            Response::error('This registration number is not active in Student Voice. See the person running the vote.', 403);
         }
         Auth::loginStudent((int) $student['id']);
         Response::ok(['student' => Auth::student(), 'csrf' => Auth::csrfToken()]);

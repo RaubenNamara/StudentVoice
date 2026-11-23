@@ -82,7 +82,7 @@ final class Router
         }
         if ($auth === 'student') {
             if (!Auth::student()) {
-                Response::error('Please enter your voting number again.', 401, ['code' => 'student_signed_out']);
+                Response::error('Please sign in again with your registration number.', 401, ['code' => 'student_signed_out']);
             }
         } else {
             $admin = Auth::admin();

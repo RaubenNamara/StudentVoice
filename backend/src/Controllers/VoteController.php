@@ -148,6 +148,12 @@ final class VoteController
                 if ($gate->rowCount() !== 1) {
                     return false;
                 }
+                // and once per teacher across all subjects in this poll
+                $once = $db->prepare('INSERT IGNORE INTO vote_gates (poll_id, gate, teacher_id, subject_id) VALUES (?, ?, ?, 0)');
+                $once->execute([$poll['id'], Gate::teacher($poll['id'], (int) $student['id'], $teacherId), $teacherId]);
+                if ($once->rowCount() !== 1) {
+                    return false;
+                }
                 $this->markNotMine($db, $poll['id'], (int) $student['id'], $subjectId, $markNotMine);
                 // took part in the poll (turnout only; no teacher here)
                 $db->prepare('INSERT IGNORE INTO voters (poll_id, student_id, class, stream) VALUES (?, ?, ?, ?)')
@@ -229,6 +235,7 @@ final class VoteController
 
         // every fingerprint this student could have in the poll, to look up in one query
         $gates = [];
+        $ratedAnywhere = [];
         $out = [];
         foreach ($list as $su => $assigned) {
             // a listed teacher is the only choice; with nobody listed, the department's teachers
@@ -238,6 +245,9 @@ final class VoteController
             }
             foreach ([0, ...$options] as $t) {
                 $gates[Gate::for($poll['id'], $sid, $t, $su)] = [$su, $t];
+                if ($t) {
+                    $gates[Gate::teacher($poll['id'], $sid, $t)] = [null, $t];
+                }
             }
             $out[$su] = [
                 'subject_id' => $su,
@@ -258,17 +268,34 @@ final class VoteController
                 $stmt->execute([$poll['id'], ...$chunk]);
                 foreach ($stmt->fetchAll() as $row) {
                     [$su, $t] = $gates[$row['gate']];
-                    if ($t === 0) {
+                    if ($su === null) {
+                        $ratedAnywhere[$t] = true;
+                    } elseif ($t === 0) {
                         $out[$su]['skipped'] = true;
                     } elseif (!(int) $row['skipped']) {
                         $out[$su]['rated'][] = $t;
+                        $ratedAnywhere[$t] = true; // ratings from before the per-teacher mark
                     }
                 }
             }
         }
-        foreach ($out as &$s) {
+        // A teacher is rated once per poll, whatever the subject. Rated in another subject: a
+        // listed teacher counts as done here; a teacher to choose from drops out of the choices.
+        foreach ($out as $su => &$s) {
+            foreach ($s['assigned'] as $t) {
+                if (isset($ratedAnywhere[$t]) && !in_array($t, $s['rated'], true)) {
+                    $s['rated'][] = $t;
+                }
+            }
+            if (!$s['assigned']) {
+                $s['options'] = array_values(array_filter($s['options'], fn ($t) => !isset($ratedAnywhere[$t]) || in_array($t, $s['rated'], true)));
+            }
             $s['done'] = $s['skipped'] ? $s['places'] : min($s['places'], count($s['rated']));
+            if (!$s['options']) {
+                $s['done'] = $s['places']; // nobody left to rate for this subject
+            }
         }
+        unset($s);
         return array_values($out);
     }
 

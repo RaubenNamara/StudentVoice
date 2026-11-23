@@ -138,8 +138,20 @@ async function send(answers: Record<number, unknown>) {
   try {
     await api.post(`/vote/polls/${poll.value.id}`, s ? { answers, subject_id: s.subject_id, teacher_id: teacherId.value } : { answers })
     if (s) {
-      s.rated.push(Number(teacherId.value))
+      const tid = Number(teacherId.value)
+      s.rated.push(tid)
       s.done = Math.min(s.places, s.done + 1)
+      // a teacher is rated once per poll: their other subjects for this student close too
+      for (const o of poll.value.subjects ?? []) {
+        if (o === s || o.skipped) continue
+        if (o.assigned.some((t) => t.id === tid)) {
+          if (!o.rated.includes(tid)) o.rated.push(tid)
+          o.done = Math.min(o.places, o.rated.length)
+        } else if (!o.assigned.length) {
+          o.options = o.options.filter((t) => t.id !== tid)
+          if (!o.options.length) o.done = o.places
+        }
+      }
       if (open(s)) {
         // several listed teachers: back to them, to rate another or say they are done
         toast(`Thank you - ${teacher.value?.name ?? 'teacher'} rated.`)

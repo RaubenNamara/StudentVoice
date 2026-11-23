@@ -11,7 +11,7 @@ const session = useSession()
 const router = useRouter()
 const route = useRoute()
 const code = ref('')
-const error = ref(route.query.expired ? 'You were signed out after a while without activity. Enter your voting number again.' : '')
+const error = ref(route.query.expired ? 'You were signed out after a while without activity. Enter your registration number again.' : '')
 
 /** Sent back from the Tusome link (?tusome=reason): what went wrong, in plain words */
 const TUSOME_PROBLEMS: Record<string, string> = {
@@ -36,37 +36,18 @@ onMounted(() => {
   input.value?.focus()
 })
 
-/**
- * The voting number box: 6 letters and numbers shown as XXX-XXX. Letters become capitals whatever
- * the keyboard says, the dash puts itself in, and anything else (spaces, dashes, symbols) is
- * refused before it shows. Pasting "k7p 4qx" or "K7P-4QX" ends up the same.
- */
-const LENGTH = 6
-const clean = (v: string) => v.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, LENGTH)
-/** The dash appears as soon as the 3rd character is in (unless they are deleting back to it) */
-const withDash = (raw: string, deleting = false) =>
-  raw.length > 3 || (raw.length === 3 && !deleting) ? `${raw.slice(0, 3)}-${raw.slice(3)}` : raw
-
-/** Typed characters that aren't letters or numbers never reach the box (pastes are cleaned after) */
-function onBeforeInput(e: InputEvent) {
-  if (e.inputType === 'insertText' && e.data && /[^A-Za-z0-9]/.test(e.data)) e.preventDefault()
-}
-
+/** The registration number box: capitals, no spaces (a slip's voting number also works) */
 function onInput(e: Event) {
   const el = e.target as HTMLInputElement
-  // Backspace over the dash takes it away instead of the dash coming straight back
-  const deleting = (e as InputEvent).inputType?.startsWith('delete') ?? false
-  code.value = withDash(clean(el.value), deleting)
-  // write it back even when nothing changed (Vue wouldn't), so a refused character never lingers
+  code.value = el.value.toUpperCase().replace(/\s+/g, '').slice(0, 40)
   el.value = code.value
-  el.setSelectionRange(el.value.length, el.value.length)
   if (error.value) error.value = ''
 }
 
 async function submit() {
   error.value = ''
-  if (clean(code.value).length !== LENGTH) {
-    error.value = 'Your voting number has 6 letters and numbers, like K7P-4QX. Check your slip.'
+  if (!code.value.trim()) {
+    error.value = 'Type your registration number, like 22-09390.'
     return
   }
   busy.value = true
@@ -82,7 +63,7 @@ async function submit() {
 
 const promises = [
   { icon: EyeSlashIcon, t: 'No names', d: 'Answers are saved without your name or number.' },
-  { icon: HandRaisedIcon, t: 'Once each', d: 'Your number stops anyone voting twice.' },
+  { icon: HandRaisedIcon, t: 'Once each', d: 'You can rate each teacher only once.' },
   { icon: LockClosedIcon, t: 'Safe to be honest', d: 'Teachers never see who said what.' },
 ]
 </script>
@@ -120,29 +101,28 @@ const promises = [
         </div>
 
         <form v-else class="card p-6 shadow-lift sm:p-8" @submit.prevent="submit">
-          <label for="code" class="label">Your voting number</label>
+          <label for="code" class="label">Your registration number</label>
           <input
             id="code"
             ref="input"
             :value="code"
-            class="input py-3.5 text-center font-mono text-3xl tracking-[0.3em] uppercase"
-            placeholder="XXX-XXX"
+            class="input py-3.5 text-center font-mono text-2xl tracking-[0.15em] uppercase"
+            placeholder="e.g. 22-09390"
             autocomplete="off"
             autocapitalize="characters"
             autocorrect="off"
             spellcheck="false"
             inputmode="text"
             enterkeyhint="go"
-            @beforeinput="onBeforeInput"
             @input="onInput"
           />
-          <p class="mt-1.5 text-xs text-gray-500">It's on the slip from your class teacher.</p>
+          <p class="mt-1.5 text-xs text-gray-500">Your school registration number (the same one on your report card).</p>
           <p v-if="error" class="field-error" role="alert">{{ error }}</p>
           <button type="submit" class="btn-primary mt-5 w-full py-3.5 text-base" :disabled="busy">
             {{ busy ? 'Checking…' : "Let's go" }}
           </button>
           <p v-if="session.tusomeUrl" class="mt-4 text-center text-xs text-gray-500">
-            Or open Student Voice from your <a :href="session.tusomeUrl" class="font-semibold text-indigo-700 hover:underline dark:text-crest-300">Tusome</a> dashboard - no number needed.
+            Or open Student Voice from your <a :href="session.tusomeUrl" class="font-semibold text-indigo-700 hover:underline dark:text-crest-300">Tusome</a> dashboard.
           </p>
         </form>
 

@@ -53,10 +53,16 @@ router.beforeEach(async (to) => {
   if (to.meta.needs === 'student' && !session.student) {
     // students sign in only through Tusome: send them there instead of the voting-number page
     if (session.tusomeUrl && !session.votingNumbers) {
-      window.location.href = session.tusomeUrl
+      window.location.href = `${session.tusomeUrl}/login`
       return false
     }
     return { name: 'vote-login' }
+  }
+  // the start page, Tusome-only: straight to Tusome's sign-in (unless coming back from Tusome
+  // with a problem to show, so it can never loop)
+  if (to.name === 'vote-login' && !session.student && session.tusomeUrl && !session.votingNumbers && !to.query.tusome) {
+    window.location.href = `${session.tusomeUrl}/login`
+    return false
   }
   if (to.meta.needs === 'admin') {
     if (!session.admin) return { name: 'admin-login', query: { next: to.fullPath } }

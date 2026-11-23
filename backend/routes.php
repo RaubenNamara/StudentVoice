@@ -9,6 +9,7 @@ use StudentVoice\Controllers\ResultController;
 use StudentVoice\Controllers\StudentController;
 use StudentVoice\Controllers\TeacherController;
 use StudentVoice\Controllers\TeacherResultController;
+use StudentVoice\Controllers\TurnoutController;
 use StudentVoice\Controllers\TusomeSignInController;
 use StudentVoice\Controllers\VoteController;
 use StudentVoice\Http\Router;
@@ -58,6 +59,8 @@ $router->post('/api/admin/polls/{id}/questions', [PollController::class, 'saveQu
 $router->post('/api/admin/polls/{id}/status', [PollController::class, 'setStatus']);
 $router->post('/api/admin/polls/{id}/duplicate', [PollController::class, 'duplicate']);
 $router->get('/api/admin/polls/{id}/results', [ResultController::class, 'show']);
+$router->get('/api/admin/polls/{id}/turnout', [TurnoutController::class, 'show']);
+$router->get('/api/admin/polls/{id}/voters', [TurnoutController::class, 'voters']);
 $router->get('/api/admin/polls/{id}/teachers', [TeacherResultController::class, 'ranking']);
 $router->get('/api/admin/polls/{id}/teachers/leaders', [TeacherResultController::class, 'leaders']);
 $router->get('/api/admin/polls/{id}/teachers/{teacher}/{subject}', [TeacherResultController::class, 'report']);

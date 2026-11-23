@@ -3,6 +3,9 @@ import { computed, onMounted, ref } from 'vue'
 import { ArrowPathIcon, ChartBarIcon, PlusIcon } from '@heroicons/vue/24/outline'
 import PageHeader from '@/components/PageHeader.vue'
 import Meter from '@/components/Meter.vue'
+import TopTeachers from '@/components/TopTeachers.vue'
+import TurnoutPanel from '@/components/TurnoutPanel.vue'
+import VotersList from '@/components/VotersList.vue'
 import { api } from '@/api'
 import { formatDate, percent } from '@/feedback'
 import type { Poll } from '@/types'
@@ -17,7 +20,24 @@ interface Overview {
 }
 
 const data = ref<Overview | null>(null)
-onMounted(async () => (data.value = await api.get<Overview>('/admin/overview')))
+/** The open poll the turnout, students and best teachers below are about */
+const focusId = ref(0)
+const focus = computed(() => data.value?.open_polls.find((p) => p.id === focusId.value) ?? null)
+const voterClass = ref('')
+const voterStream = ref('')
+const voterShow = ref<'voted' | 'not'>('voted')
+const votersEl = ref<HTMLElement>()
+onMounted(async () => {
+  data.value = await api.get<Overview>('/admin/overview')
+  focusId.value = data.value.open_polls[0]?.id ?? 0
+})
+/** A stream tapped in the turnout: list its students who haven't voted yet */
+function pickStream(cls: string, stream: string) {
+  voterClass.value = cls
+  voterStream.value = stream
+  voterShow.value = 'not'
+  votersEl.value?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+}
 
 const peak = computed(() => Math.max(1, ...(data.value?.votes_by_day.map((d) => d.votes) ?? [1])))
 const fortnight = computed(() => data.value?.votes_by_day.reduce((s, d) => s + d.votes, 0) ?? 0)
@@ -88,6 +108,22 @@ const dayLabel = (d: string) => new Date(d).toLocaleDateString('en-GB', { weekda
         </div>
       </section>
     </div>
+
+    <template v-if="focus">
+      <div class="mt-8 flex flex-wrap items-center justify-between gap-3">
+        <h2 class="text-lg font-semibold">How {{ data.open_polls.length > 1 ? 'this poll' : `"${focus.title}"` }} is going</h2>
+        <select v-if="data.open_polls.length > 1" v-model="focusId" class="input w-auto" aria-label="Poll">
+          <option v-for="p in data.open_polls" :key="p.id" :value="p.id">{{ p.title }}</option>
+        </select>
+      </div>
+      <div class="mt-4 grid items-start gap-6 lg:grid-cols-5">
+        <TurnoutPanel :poll-id="focus.id" :class="focus.about === 'teachers' ? 'lg:col-span-3' : 'lg:col-span-5'" @pick="pickStream" />
+        <TopTeachers v-if="focus.about === 'teachers'" :poll-id="focus.id" class="lg:col-span-2" />
+      </div>
+      <div ref="votersEl" class="mt-6 scroll-mt-4">
+        <VotersList v-model:show="voterShow" v-model:cls="voterClass" v-model:stream="voterStream" :poll-id="focus.id" />
+      </div>
+    </template>
 
     <p v-if="data.last_sync?.status === 'failed'" class="mt-6 flex items-center gap-2 rounded-xl bg-gold-50 p-3 text-sm text-gold-700">
       <ArrowPathIcon class="h-4 w-4" /> The last SMIS sync failed: {{ data.last_sync.message }}

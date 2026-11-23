@@ -142,6 +142,96 @@ final class TeacherResultController
         Response::ok(['questions' => $questions, 'teachers' => $teachers, 'min_group' => Polls::MIN_GROUP]);
     }
 
+    /**
+     * GET /admin/polls/{id}/teachers/meeting - the printed meeting report: every teacher (per subject)
+     * with enough ratings, with their spread of answers per statement and the students' written
+     * comments (per comment question). Teachers with fewer than MIN_GROUP ratings are left out.
+     */
+    public function meeting(Request $r): never
+    {
+        $db = Database::get();
+        $poll = $this->teacherPoll((int) $r->param('id'));
+        $questions = Polls::questions($db, $poll['id']);
+        $scale = array_values(array_map(
+            fn ($q) => ['id' => $q['id'], 'prompt' => $q['prompt'], 'section' => $q['section']],
+            array_filter($questions, fn ($q) => $q['type'] === 'scale')
+        ));
+        $textQs = array_values(array_map(
+            fn ($q) => ['id' => $q['id'], 'prompt' => $q['prompt']],
+            array_filter($questions, fn ($q) => $q['type'] === 'text')
+        ));
+        $ballots = $this->ballotCounts($db, $poll['id']);
+        $enough = array_filter($ballots, fn ($n) => $n >= Polls::MIN_GROUP);
+
+        $counts = [];
+        $school = [0, 0, 0, 0, 0];
+        $stmt = $db->prepare(
+            "SELECT b.teacher_id, b.subject_id, a.question_id, a.value_num, COUNT(*)
+             FROM answers a JOIN ballots b ON b.id = a.ballot_id JOIN questions q ON q.id = a.question_id AND q.type = 'scale'
+             WHERE b.poll_id = ? AND b.teacher_id IS NOT NULL GROUP BY b.teacher_id, b.subject_id, a.question_id, a.value_num"
+        );
+        $stmt->execute([$poll['id']]);
+        foreach ($stmt->fetchAll(PDO::FETCH_NUM) as [$t, $s, $q, $v, $n]) {
+            if ($v < 1 || $v > 5) {
+                continue;
+            }
+            $school[(int) $v - 1] += (int) $n;
+            if (isset($enough["$t|$s"])) {
+                $counts["$t|$s"][(int) $q] ??= [0, 0, 0, 0, 0];
+                $counts["$t|$s"][(int) $q][(int) $v - 1] = (int) $n;
+            }
+        }
+
+        // written comments, shuffled so their order says nothing about who wrote them
+        $comments = [];
+        if ($textQs) {
+            $stmt = $db->prepare(
+                "SELECT b.teacher_id, b.subject_id, a.question_id, a.value_text
+                 FROM answers a JOIN ballots b ON b.id = a.ballot_id JOIN questions q ON q.id = a.question_id AND q.type = 'text'
+                 WHERE b.poll_id = ? AND b.teacher_id IS NOT NULL AND a.value_text IS NOT NULL AND a.value_text <> ''"
+            );
+            $stmt->execute([$poll['id']]);
+            foreach ($stmt->fetchAll(PDO::FETCH_NUM) as [$t, $s, $q, $text]) {
+                if (isset($enough["$t|$s"])) {
+                    $comments["$t|$s"][(int) $q][] = trim((string) $text);
+                }
+            }
+            foreach ($comments as &$byQ) {
+                foreach ($byQ as &$list) {
+                    shuffle($list);
+                }
+            }
+            unset($byQ, $list);
+        }
+
+        $names = $db->query('SELECT id, name FROM teachers')->fetchAll(PDO::FETCH_KEY_PAIR);
+        $subjects = $db->query('SELECT id, name FROM subjects')->fetchAll(PDO::FETCH_KEY_PAIR);
+        $teachers = [];
+        foreach ($enough as $k => $n) {
+            [$t, $s] = array_map('intval', explode('|', $k));
+            $teachers[] = [
+                'teacher_id' => $t,
+                'teacher' => $names[$t] ?? '(removed)',
+                'subject_id' => $s,
+                'subject' => $subjects[$s] ?? '',
+                'ratings' => $n,
+                'counts' => (object) ($counts[$k] ?? []),
+                'comments' => (object) ($comments[$k] ?? []),
+            ];
+        }
+        usort($teachers, fn ($a, $b) => [$a['subject'], $a['teacher']] <=> [$b['subject'], $b['teacher']]);
+
+        Response::ok([
+            'poll' => $poll,
+            'questions' => $scale,
+            'comment_questions' => $textQs,
+            'school' => $school,
+            'teachers' => $teachers,
+            'hidden' => count($ballots) - count($enough),
+            'min_group' => Polls::MIN_GROUP,
+        ]);
+    }
+
     /** GET /admin/polls/{id}/teachers/{teacher}/{subject} - one teacher's report */
     public function report(Request $r): never
     {

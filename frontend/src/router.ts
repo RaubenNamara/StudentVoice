@@ -33,6 +33,7 @@ const router = createRouter({
         { path: 'polls/:id(\\d+)', name: 'poll', component: () => import('@/pages/admin/PollEditPage.vue'), meta: { title: 'Poll' } },
         { path: 'polls/:id(\\d+)/results', name: 'results', component: () => import('@/pages/admin/ResultsPage.vue'), meta: { title: 'Results' } },
         { path: 'polls/:id(\\d+)/teachers', name: 'teacher-results', component: () => import('@/pages/admin/TeacherRankingPage.vue'), meta: { title: 'Teacher results' } },
+        { path: 'polls/:id(\\d+)/teachers/meeting', name: 'teacher-meeting', component: () => import('@/pages/admin/TeacherMeetingPage.vue'), meta: { title: 'Meeting report' } },
         { path: 'polls/:id(\\d+)/teachers/:teacher(\\d+)/:subject(\\d+)', name: 'teacher-report', component: () => import('@/pages/admin/TeacherReportPage.vue'), meta: { title: 'Teacher report' } },
         { path: 'students', name: 'students', component: () => import('@/pages/admin/StudentsPage.vue'), meta: { title: 'Students' } },
         { path: 'teachers', name: 'teachers', component: () => import('@/pages/admin/TeachersPage.vue'), meta: { title: 'Teachers' } },

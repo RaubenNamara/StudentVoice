@@ -119,6 +119,7 @@ const print = () => window.print()
       <RouterLink :to="{ name: 'results', params: { id: data.poll.id } }" class="btn-secondary no-print">Whole school</RouterLink>
       <button class="btn-secondary no-print" @click="exportCsv"><ArrowDownTrayIcon class="h-4 w-4" /> Spreadsheet</button>
       <button class="btn-secondary no-print" @click="print"><PrinterIcon class="h-4 w-4" /> Print</button>
+      <RouterLink :to="{ name: 'teacher-meeting', params: { id: data.poll.id } }" class="btn-primary no-print"><PrinterIcon class="h-4 w-4" /> Meeting report</RouterLink>
     </PageHeader>
 
     <!-- School line -->

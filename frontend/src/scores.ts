@@ -19,6 +19,8 @@ export function scoreText(v: number | null | undefined): string {
 }
 
 export const fmt = (v: number | null | undefined) => (v == null ? '–' : v.toFixed(2))
+/** A 1-5 score as a percentage of the top mark (3.91 -> 78%), easier to read for most people */
+export const asPct = (v: number | null | undefined) => (v == null ? '–' : `${Math.round((v / 5) * 100)}%`)
 
 export function downloadCsv(name: string, rows: (string | number | null)[][]) {
   const csv = rows.map((row) => row.map((c) => `"${String(c ?? '').replace(/"/g, '""')}"`).join(',')).join('\r\n')

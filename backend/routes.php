@@ -64,6 +64,7 @@ $router->get('/api/admin/polls/{id}/turnout', [TurnoutController::class, 'show']
 $router->get('/api/admin/polls/{id}/voters', [TurnoutController::class, 'voters']);
 $router->get('/api/admin/polls/{id}/teachers', [TeacherResultController::class, 'ranking']);
 $router->get('/api/admin/polls/{id}/teachers/leaders', [TeacherResultController::class, 'leaders']);
+$router->get('/api/admin/polls/{id}/teachers/meeting', [TeacherResultController::class, 'meeting']);
 $router->get('/api/admin/polls/{id}/teachers/{teacher}/{subject}', [TeacherResultController::class, 'report']);
 
 // Teachers (from Tusome) and the Teaching list

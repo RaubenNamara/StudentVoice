@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
-import { EyeSlashIcon, PrinterIcon } from '@heroicons/vue/24/outline'
+import { ArrowDownTrayIcon, EyeSlashIcon, PrinterIcon } from '@heroicons/vue/24/outline'
 import BrandMark from '@/components/BrandMark.vue'
 import LikertBar from '@/components/LikertBar.vue'
 import { api } from '@/api'
@@ -216,6 +216,43 @@ const FLAG_TONE: Record<string, string> = {
 }
 const today = formatDate(new Date().toISOString(), false)
 const print = () => window.print()
+
+/* ---------- one PDF per teacher, zipped (to send each teacher their own) ---------- */
+const withoutSensitive = ref(false)
+const zipping = ref<{ done: number; total: number } | null>(null)
+const zipNote = ref('')
+/** Teachers the download covers: the chosen subject(s), less any left out, one file each */
+const zipTeachers = computed(() => new Set(inScope.value.map((r) => r.teacher_id)).size)
+async function downloadZip() {
+  if (!d.value || zipping.value) return
+  zipNote.value = ''
+  zipping.value = { done: 0, total: zipTeachers.value }
+  try {
+    const { teacherReportsZip } = await import('@/teacherPdf')
+    const { blob, files, comments } = await teacherReportsZip({
+      school: session.school || "St. Mark's College Namagoma",
+      poll: d.value.poll.title,
+      questions: d.value.questions,
+      commentQuestions: d.value.comment_questions,
+      schoolCounts: d.value.school,
+      minGroup: d.value.min_group,
+      rows: inScope.value.map((r) => ({ ...r, subject: subjectLook(r.subject).name })),
+      withoutSensitive: withoutSensitive.value,
+      onProgress: (done, total) => (zipping.value = { done, total }),
+    })
+    const a = document.createElement('a')
+    a.href = URL.createObjectURL(blob)
+    const part = subject.value ? ` - ${subjects.value.find((x) => x.id === subject.value)?.name ?? ''}` : ''
+    a.download = `${d.value.poll.title}${part} - teacher reports.zip`.replace(/[\\/:*?"<>|]/g, '')
+    a.click()
+    setTimeout(() => URL.revokeObjectURL(a.href), 10000)
+    zipNote.value = `${files} teacher report${files === 1 ? '' : 's'} downloaded, with ${comments} written comment${comments === 1 ? '' : 's'}.`
+  } catch (e) {
+    zipNote.value = e instanceof Error ? `Could not make the reports: ${e.message}` : 'Could not make the reports.'
+  } finally {
+    zipping.value = null
+  }
+}
 </script>
 
 <template>
@@ -234,7 +271,13 @@ const print = () => window.print()
           <h1 class="text-2xl font-semibold tracking-tight">Meeting report</h1>
           <p class="mt-1 text-sm text-gray-600">{{ d.poll.title }} · teachers {{ perPage }} to a page, a subject at a time, with chosen student comments</p>
         </div>
-        <button class="btn-primary" :disabled="!pageCount" @click="print"><PrinterIcon class="h-4 w-4" /> Print report</button>
+        <div class="flex flex-wrap gap-2">
+          <button class="btn-secondary" :disabled="!zipTeachers || !!zipping" title="One PDF for each teacher, with all their comments, in a ZIP file" @click="downloadZip">
+            <ArrowDownTrayIcon class="h-4 w-4" />
+            {{ zipping ? `Making ${zipping.done} of ${zipping.total}...` : `Teacher reports (ZIP, ${zipTeachers})` }}
+          </button>
+          <button class="btn-primary" :disabled="!pageCount" @click="print"><PrinterIcon class="h-4 w-4" /> Print report</button>
+        </div>
       </div>
 
       <div class="card mt-4 grid gap-4 p-5 sm:grid-cols-2 lg:grid-cols-4">
@@ -270,7 +313,12 @@ const print = () => window.print()
       <div class="mt-3 flex flex-wrap gap-x-6 gap-y-2 text-sm">
         <label class="flex items-center gap-2"><input v-model="onlyFlagged" type="checkbox" class="rounded" /> Only teachers with sensitive comments</label>
         <label class="flex items-center gap-2"><input v-model="withSummary" type="checkbox" class="rounded" /> Add a last page: best 5 and lowest 5 teachers</label>
+        <label class="flex items-center gap-2"><input v-model="withoutSensitive" type="checkbox" class="rounded" /> Leave sensitive comments out of the teachers' own reports</label>
       </div>
+      <p class="mt-2 text-sm text-gray-600">
+        <strong>Teacher reports (ZIP)</strong> makes one PDF for each teacher, named after them, to send to them privately (for example on WhatsApp). Each has their scores for every statement and <strong>every</strong> written comment, not only the ticked ones (identical comments are listed once with how many students wrote them). A teacher of two subjects gets both in one file.
+      </p>
+      <p v-if="zipNote" class="mt-2 text-sm font-medium text-indigo-800 dark:text-indigo-300">{{ zipNote }}</p>
 
       <!-- sensitive comments found (harassment, academic concerns) -->
       <div v-if="flagged.length" class="mt-4 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-900 dark:border-red-900 dark:bg-red-950/40 dark:text-red-200">

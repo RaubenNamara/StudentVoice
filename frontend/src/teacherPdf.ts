@@ -73,21 +73,14 @@ const NAVY: [number, number, number] = [49, 46, 129]
 const GREY: [number, number, number] = [100, 100, 110]
 const GOLD: [number, number, number] = [161, 98, 7]
 
-export async function teacherReportsZip(input: PdfInput): Promise<{ blob: Blob; files: number; comments: number }> {
-  const [{ jsPDF }, { default: JSZip }] = await Promise.all([import('jspdf'), import('jszip')])
-  const zip = new JSZip()
-  const used = new Set<string>()
+type JsPdf = typeof import('jspdf').jsPDF
+
+/** All of one teacher's rows (their subjects) in one PDF; returns its bytes and comment count */
+function buildPdf(jsPDF: JsPdf, input: PdfInput, rows: PdfRow[]): { bytes: ArrayBuffer; comments: number } {
   const today = new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })
   const schoolAvg = average(input.schoolCounts)
-
-  // one file per teacher, their subjects together
-  const byTeacher = new Map<number, PdfRow[]>()
-  for (const r of input.rows) byTeacher.set(r.teacher_id, [...(byTeacher.get(r.teacher_id) ?? []), r])
-  const teachers = [...byTeacher.values()].sort((a, b) => a[0].teacher.localeCompare(b[0].teacher))
-
-  let done = 0
   let commentCount = 0
-  for (const rows of teachers) {
+  {
     const doc = new jsPDF({ unit: 'mm', format: 'a4' })
     const W = 210
     const M = 16
@@ -198,7 +191,33 @@ export async function teacherReportsZip(input: PdfInput): Promise<{ blob: Blob; 
       doc.text(`Page ${p} of ${pages}`, W - M, 290, { align: 'right' })
     }
 
-    zip.file(fileName(rows[0].teacher, used), doc.output('arraybuffer'))
+    return { bytes: doc.output('arraybuffer'), comments: commentCount }
+  }
+}
+
+/** One teacher's report as a single PDF (all their subjects) */
+export async function teacherReportPdf(input: PdfInput): Promise<{ blob: Blob; name: string; comments: number }> {
+  const { jsPDF } = await import('jspdf')
+  const { bytes, comments } = buildPdf(jsPDF, input, input.rows)
+  return { blob: new Blob([bytes], { type: 'application/pdf' }), name: fileName(input.rows[0]?.teacher ?? 'Teacher', new Set()), comments }
+}
+
+export async function teacherReportsZip(input: PdfInput): Promise<{ blob: Blob; files: number; comments: number }> {
+  const [{ jsPDF }, { default: JSZip }] = await Promise.all([import('jspdf'), import('jszip')])
+  const zip = new JSZip()
+  const used = new Set<string>()
+
+  // one file per teacher, their subjects together
+  const byTeacher = new Map<number, PdfRow[]>()
+  for (const r of input.rows) byTeacher.set(r.teacher_id, [...(byTeacher.get(r.teacher_id) ?? []), r])
+  const teachers = [...byTeacher.values()].sort((a, b) => a[0].teacher.localeCompare(b[0].teacher))
+
+  let done = 0
+  let commentCount = 0
+  for (const rows of teachers) {
+    const { bytes, comments } = buildPdf(jsPDF, input, rows)
+    commentCount += comments
+    zip.file(fileName(rows[0].teacher, used), bytes)
     input.onProgress?.(++done, teachers.length)
     await new Promise((res) => setTimeout(res, 0)) // let the page show progress
   }

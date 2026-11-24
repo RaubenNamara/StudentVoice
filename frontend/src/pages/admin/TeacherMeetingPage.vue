@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
-import { ArrowDownTrayIcon, EyeSlashIcon, PrinterIcon } from '@heroicons/vue/24/outline'
+import { ArrowDownTrayIcon, EyeSlashIcon, MagnifyingGlassIcon, PrinterIcon, XMarkIcon } from '@heroicons/vue/24/outline'
 import BrandMark from '@/components/BrandMark.vue'
 import LikertBar from '@/components/LikertBar.vue'
 import { api } from '@/api'
@@ -53,6 +53,14 @@ onMounted(async () => {
 
 /* ---------- choices (screen only) ---------- */
 const subject = ref<number | 0>(0)
+/** find a teacher (or subject) by name */
+const search = ref('')
+const words = computed(() => search.value.toLowerCase().split(/\s+/).filter(Boolean))
+const matches = (r: Row) => {
+  if (!words.value.length) return true
+  const hay = `${r.teacher} ${subjectLook(r.subject).name} ${r.subject}`.toLowerCase()
+  return words.value.every((w) => hay.includes(w))
+}
 const perPage = ref<2 | 3>(3)
 const perQuestion = ref(3)
 const order = ref<'name' | 'best' | 'lowest'>('name')
@@ -178,7 +186,7 @@ const sheets = computed(() => {
   const out: { subject: string; part: number; parts: number; rows: Row[] }[] = []
   for (const s of subjects.value) {
     if (subject.value && subject.value !== s.id) continue
-    const rows = sorted((d.value?.teachers ?? []).filter((r) => r.subject_id === s.id && !left.has(key(r)) && (!onlyFlagged.value || hasFlag(r))))
+    const rows = sorted((d.value?.teachers ?? []).filter((r) => r.subject_id === s.id && !left.has(key(r)) && matches(r) && (!onlyFlagged.value || hasFlag(r))))
     const parts = Math.ceil(rows.length / perPage.value)
     for (let p = 0; p < parts; p++) out.push({ subject: s.name, part: p + 1, parts, rows: rows.slice(p * perPage.value, (p + 1) * perPage.value) })
   }
@@ -222,7 +230,43 @@ const withoutSensitive = ref(false)
 const zipping = ref<{ done: number; total: number } | null>(null)
 const zipNote = ref('')
 /** Teachers the download covers: the chosen subject(s), less any left out, one file each */
-const zipTeachers = computed(() => new Set(inScope.value.map((r) => r.teacher_id)).size)
+const zipRows = computed(() => inScope.value.filter(matches))
+const zipTeachers = computed(() => new Set(zipRows.value.map((r) => r.teacher_id)).size)
+const pdfInput = (rows: Row[]) => ({
+  school: session.school || "St. Mark's College Namagoma",
+  poll: d.value!.poll.title,
+  questions: d.value!.questions,
+  commentQuestions: d.value!.comment_questions,
+  schoolCounts: d.value!.school,
+  minGroup: d.value!.min_group,
+  rows: rows.map((r) => ({ ...r, subject: subjectLook(r.subject).name })),
+  withoutSensitive: withoutSensitive.value,
+})
+function save(blob: Blob, name: string) {
+  const a = document.createElement('a')
+  a.href = URL.createObjectURL(blob)
+  a.download = name
+  a.click()
+  setTimeout(() => URL.revokeObjectURL(a.href), 10000)
+}
+/** One teacher's own PDF: all the subjects they were rated in (not only the one shown) */
+const oneBusy = ref(0)
+async function downloadOne(r: Row) {
+  if (!d.value || oneBusy.value) return
+  oneBusy.value = r.teacher_id
+  zipNote.value = ''
+  try {
+    const { teacherReportPdf } = await import('@/teacherPdf')
+    const rows = d.value.teachers.filter((x) => x.teacher_id === r.teacher_id)
+    const { blob, name, comments } = await teacherReportPdf(pdfInput(rows))
+    save(blob, name)
+    zipNote.value = `${r.teacher}: report downloaded, with ${comments} written comment${comments === 1 ? '' : 's'}.`
+  } catch (e) {
+    zipNote.value = e instanceof Error ? `Could not make the report: ${e.message}` : 'Could not make the report.'
+  } finally {
+    oneBusy.value = 0
+  }
+}
 async function downloadZip() {
   if (!d.value || zipping.value) return
   zipNote.value = ''
@@ -230,22 +274,11 @@ async function downloadZip() {
   try {
     const { teacherReportsZip } = await import('@/teacherPdf')
     const { blob, files, comments } = await teacherReportsZip({
-      school: session.school || "St. Mark's College Namagoma",
-      poll: d.value.poll.title,
-      questions: d.value.questions,
-      commentQuestions: d.value.comment_questions,
-      schoolCounts: d.value.school,
-      minGroup: d.value.min_group,
-      rows: inScope.value.map((r) => ({ ...r, subject: subjectLook(r.subject).name })),
-      withoutSensitive: withoutSensitive.value,
+      ...pdfInput(zipRows.value),
       onProgress: (done, total) => (zipping.value = { done, total }),
     })
-    const a = document.createElement('a')
-    a.href = URL.createObjectURL(blob)
     const part = subject.value ? ` - ${subjects.value.find((x) => x.id === subject.value)?.name ?? ''}` : ''
-    a.download = `${d.value.poll.title}${part} - teacher reports.zip`.replace(/[\\/:*?"<>|]/g, '')
-    a.click()
-    setTimeout(() => URL.revokeObjectURL(a.href), 10000)
+    save(blob, `${d.value.poll.title}${part} - teacher reports.zip`.replace(/[\\/:*?"<>|]/g, ''))
     zipNote.value = `${files} teacher report${files === 1 ? '' : 's'} downloaded, with ${comments} written comment${comments === 1 ? '' : 's'}.`
   } catch (e) {
     zipNote.value = e instanceof Error ? `Could not make the reports: ${e.message}` : 'Could not make the reports.'
@@ -279,6 +312,13 @@ async function downloadZip() {
           <button class="btn-primary" :disabled="!pageCount" @click="print"><PrinterIcon class="h-4 w-4" /> Print report</button>
         </div>
       </div>
+
+      <div class="relative mt-4">
+        <MagnifyingGlassIcon class="pointer-events-none absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-gray-400" />
+        <input v-model="search" type="text" class="input pl-10 pr-10" placeholder="Search a teacher or subject, e.g. Alaso or Chemistry" aria-label="Search teachers" />
+        <button v-if="search" type="button" class="absolute right-2 top-1/2 -translate-y-1/2 rounded p-1 text-gray-400 hover:text-ink" aria-label="Clear search" @click="search = ''"><XMarkIcon class="h-5 w-5" /></button>
+      </div>
+      <p v-if="search" class="mt-1.5 text-sm text-gray-600">{{ teacherCount }} match{{ teacherCount === 1 ? '' : 'es' }}. Use <strong>Download PDF</strong> on a teacher, or the ZIP button for all of them.</p>
 
       <div class="card mt-4 grid gap-4 p-5 sm:grid-cols-2 lg:grid-cols-4">
         <label class="block">
@@ -341,7 +381,8 @@ async function downloadZip() {
 
     <div v-if="!sheets.length" class="card mt-6 flex items-start gap-3 p-6 text-sm text-gray-600">
       <EyeSlashIcon class="h-5 w-5 shrink-0" />
-      <p v-if="onlyFlagged && inScope.length">No sensitive comments were found for these teachers. Untick <strong>Only teachers with sensitive comments</strong> to see everyone.</p>
+      <p v-if="search && inScope.length">No teacher matches "{{ search }}". Check the spelling, or clear the search.</p>
+      <p v-else-if="onlyFlagged && inScope.length">No sensitive comments were found for these teachers. Untick <strong>Only teachers with sensitive comments</strong> to see everyone.</p>
       <p v-else>No teacher has {{ d.min_group }} or more ratings yet<template v-if="subject"> in this subject</template>. Teachers appear here once enough students have rated them, so nobody can work out what a particular student said.</p>
     </div>
 
@@ -373,6 +414,9 @@ async function downloadZip() {
             <p class="text-xs text-gray-600">{{ subjectLook(r.subject).name }} · {{ r.ratings }} students rated</p>
           </div>
           <div class="flex shrink-0 items-center gap-2">
+            <button type="button" class="no-print inline-flex items-center gap-1 rounded-lg border border-line px-2 py-1 text-xs font-semibold text-indigo-700 hover:bg-indigo-50 disabled:opacity-50" :disabled="!!oneBusy" title="This teacher's own report (all their subjects, every comment) as a PDF" @click="downloadOne(r)">
+              <ArrowDownTrayIcon class="h-3.5 w-3.5" /> {{ oneBusy === r.teacher_id ? 'Making...' : 'Download PDF' }}
+            </button>
             <button type="button" class="no-print rounded-lg px-2 py-1 text-xs text-gray-500 hover:bg-gray-50 hover:text-ink" title="Leave this teacher out of the printout" @click="left.add(key(r))">Leave out</button>
           </div>
         </div>
